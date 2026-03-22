@@ -52,6 +52,7 @@ export default function SkillLoader() {
   const [searchQuery, setSearchQuery] = useState('');
   const [matchedSkill, setMatchedSkill] = useState<SkillEntry | null>(null);
   const [completedPaths, setCompletedPaths] = useState<Set<string>>(new Set());
+  const [showParticle, setShowParticle] = useState(false);
 
   const handleStartup = () => {
     setPhase('registry');
@@ -60,11 +61,16 @@ export default function SkillLoader() {
   const handleUserInvoke = () => {
     setPhase('user-invoke');
     setHighlightedSkill('commit');
+    setShowParticle(false);
+    setTimeout(() => {
+      setShowParticle(true);
+    }, 900);
     setTimeout(() => {
       const skill = SKILLS.find(s => s.name === 'commit')!;
       setLoadedSkill(skill);
+      setShowParticle(false);
       markComplete('user-invoke');
-    }, 1200);
+    }, 1500);
   };
 
   const handleAutoRecall = () => {
@@ -72,6 +78,7 @@ export default function SkillLoader() {
     setSearchQuery(t('帮我把这些改动提交一下', 'Help me commit these changes'));
     setHighlightedSkill(null);
     setLoadedSkill(null);
+    setShowParticle(false);
 
     // Simulate semantic matching
     setTimeout(() => {
@@ -80,10 +87,15 @@ export default function SkillLoader() {
     }, 800);
 
     setTimeout(() => {
+      setShowParticle(true);
+    }, 1700);
+
+    setTimeout(() => {
       const skill = SKILLS.find(s => s.name === 'commit')!;
       setLoadedSkill(skill);
+      setShowParticle(false);
       markComplete('auto-recall');
-    }, 2000);
+    }, 2300);
   };
 
   const handleReset = () => {
@@ -92,6 +104,7 @@ export default function SkillLoader() {
     setLoadedSkill(null);
     setSearchQuery('');
     setMatchedSkill(null);
+    setShowParticle(false);
   };
 
   const markComplete = (path: string) => {
@@ -107,6 +120,17 @@ export default function SkillLoader() {
 
   return (
     <div className="skill-loader scene-dark-interactive" data-interactive style={styles.root}>
+      <style>{`
+        @keyframes skill-loader-particle-fall {
+          0% { top: 0; opacity: 0; }
+          15% { opacity: 1; }
+          85% { opacity: 1; }
+          100% { top: 100%; opacity: 0; }
+        }
+        .skill-loader-particle {
+          animation: skill-loader-particle-fall 0.6s ease-in-out forwards;
+        }
+      `}</style>
       {/* Phase: Startup */}
       {phase === 'startup' && (
         <div style={styles.startupContainer}>
@@ -141,12 +165,15 @@ export default function SkillLoader() {
             <div style={styles.registry}>
               {SKILLS.map(skill => {
                 const isHighlighted = highlightedSkill === skill.name;
+                const isFlowActive = phase === 'user-invoke' || phase === 'auto-recall';
+                const isDimmed = isFlowActive && !isHighlighted;
                 return (
                   <div
                     key={skill.name}
                     style={{
                       ...styles.registryItem,
                       ...(isHighlighted ? styles.registryItemHighlighted : {}),
+                      ...(isDimmed ? { opacity: 0.35, cursor: 'default' } : {}),
                     }}
                   >
                     <span style={{
@@ -310,6 +337,13 @@ export default function SkillLoader() {
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {/* Data flow particle animation */}
+          {showParticle && (
+            <div style={styles.particleTrack}>
+              <div className="skill-loader-particle" style={styles.particle} />
             </div>
           )}
 
@@ -582,6 +616,22 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     fontFamily: 'var(--font-mono, monospace)',
     cursor: 'pointer',
+  },
+  particleTrack: {
+    position: 'relative' as const,
+    height: '28px',
+    display: 'flex',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  particle: {
+    position: 'absolute' as const,
+    top: 0,
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: '#7c3aed',
+    boxShadow: '0 0 8px 2px rgba(124, 58, 237, 0.6)',
   },
   progress: {
     marginTop: '12px',
