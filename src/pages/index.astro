@@ -2,6 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import { chapters, getChaptersByCategory } from '../config/chapters';
 const categories = getChaptersByCategory();
+const base = import.meta.env.BASE_URL;
 ---
 
 <Layout>
@@ -23,7 +24,7 @@ const categories = getChaptersByCategory();
         <span data-zh="以 AI 的第一人称视角" data-en="From AI's first-person perspective">以 AI 的第一人称视角</span><br />
         <span data-zh="交互式理解 Claude Code 的工作原理" data-en="Interactively understand how Claude Code works">交互式理解 Claude Code 的工作原理</span>
       </p>
-      <a href="/chapters/prompt" class="hero-cta">
+      <a href={`${base}/chapters/prompt`} class="hero-cta">
         <span data-zh="开始旅程" data-en="Start the Journey">开始旅程</span>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M3 8h10M9 4l4 4-4 4" />
@@ -33,7 +34,7 @@ const categories = getChaptersByCategory();
 
     <section class="chapter-grid">
       {chapters.map((chapter) => (
-        <a href={`/chapters/${chapter.slug}`} class="chapter-card">
+        <a href={`${base}/chapters/${chapter.slug}`} class="chapter-card">
           <div class="card-header">
             <span class="card-number">{String(chapter.id).padStart(2, '0')}</span>
             <span class="card-icon">{chapter.icon}</span>
