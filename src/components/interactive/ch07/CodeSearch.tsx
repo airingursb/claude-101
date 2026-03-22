@@ -117,7 +117,7 @@ export default function CodeSearch() {
   const selected = searchToolsData.find((tool) => tool.id === selectedTool);
 
   return (
-    <div className="code-search" data-interactive>
+    <div className="code-search scene-dark-interactive" data-interactive>
       <div className="code-search__hint">
         {t('点击每个搜索工具，看看它是怎么工作的', 'Click each search tool to see how it works')}
       </div>

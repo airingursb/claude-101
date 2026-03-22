@@ -60,7 +60,7 @@ export default function MessageStructure() {
   };
 
   return (
-    <div className="msg-structure" data-interactive>
+    <div className="msg-structure scene-dark-interactive" data-interactive>
       <div className="msg-structure__container">
         <div className="msg-structure__bracket">[</div>
 

@@ -78,7 +78,7 @@ export default function MCPArchitecture() {
   };
 
   return (
-    <div className="mcp-arch" data-interactive>
+    <div className="mcp-arch scene-dark-interactive" data-interactive>
       <div className="mcp-arch__section">
         <div className="mcp-arch__section-title">{t('MCP 架构', 'MCP Architecture')}</div>
         <div className="mcp-arch__section-hint">{t('点击每一层，了解它的作用', 'Click each layer to learn its role')}</div>

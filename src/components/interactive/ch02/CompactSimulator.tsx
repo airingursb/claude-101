@@ -78,7 +78,7 @@ export default function CompactSimulator() {
   };
 
   return (
-    <div className="compact-sim" data-interactive style={styles.root}>
+    <div className="compact-sim scene-dark-interactive" data-interactive style={styles.root}>
       {/* Header */}
       <div className="compact-sim__header" style={styles.header}>
         <span style={styles.headerTitle}>

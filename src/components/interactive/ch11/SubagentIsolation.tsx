@@ -37,7 +37,7 @@ export default function SubagentIsolation() {
   };
 
   return (
-    <div className="subagent-iso" data-interactive style={styles.root}>
+    <div className="subagent-iso scene-dark-interactive" data-interactive style={styles.root}>
       {/* Tab Switch */}
       <div style={styles.tabs}>
         <button

@@ -106,7 +106,7 @@ export default function SkillLoader() {
   };
 
   return (
-    <div className="skill-loader" data-interactive style={styles.root}>
+    <div className="skill-loader scene-dark-interactive" data-interactive style={styles.root}>
       {/* Phase: Startup */}
       {phase === 'startup' && (
         <div style={styles.startupContainer}>

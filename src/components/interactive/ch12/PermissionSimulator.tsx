@@ -164,7 +164,7 @@ export default function PermissionSimulator() {
   if (allDone) {
     const correct = toolCalls.filter((tc) => decisions[tc.id] === tc.recommended).length;
     return (
-      <div className="perm-sim" data-interactive>
+      <div className="perm-sim scene-dark-interactive" data-interactive>
         <div className="perm-sim__summary">
           <div className="perm-sim__summary-title">{t('审核完成', 'Review Complete')}</div>
           <div className="perm-sim__summary-score">
@@ -201,7 +201,7 @@ export default function PermissionSimulator() {
   }
 
   return (
-    <div className="perm-sim" data-interactive>
+    <div className="perm-sim scene-dark-interactive" data-interactive>
       <div className="perm-sim__progress">
         {currentIndex + 1} / {toolCalls.length}
       </div>

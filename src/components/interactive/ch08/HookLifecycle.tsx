@@ -134,7 +134,7 @@ export default function HookLifecycle() {
   const selected = hookEvents.find((e) => e.id === selectedEvent);
 
   return (
-    <div className="hook-lifecycle" data-interactive>
+    <div className="hook-lifecycle scene-dark-interactive" data-interactive>
       <div className="hook-lifecycle__hint">{t(
         '点击时间线上的事件，查看可以挂载的 Hook',
         'Click events on the timeline to see available Hook mount points'

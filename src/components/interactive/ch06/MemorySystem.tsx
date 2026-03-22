@@ -75,7 +75,7 @@ export default function MemorySystem() {
   const selected = memoryLayersData.find((l) => l.id === selectedLayer);
 
   return (
-    <div className="memory-sys" data-interactive>
+    <div className="memory-sys scene-dark-interactive" data-interactive>
       <div className="memory-sys__hint">{t('点击每一层，了解它如何帮助 AI 记忆', 'Click each layer to learn how it helps AI remember')}</div>
 
       <div className="memory-sys__layers">

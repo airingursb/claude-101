@@ -186,8 +186,8 @@
   z-index: 1;
 }
 
-/* Override theme vars for interactive components on dark scene backgrounds */
-[data-interactive] {
+/* Override theme vars for interactive components with dark inline backgrounds */
+.scene-dark-interactive {
   --color-text: #e5e5e5;
   --color-text-secondary: #aaaaaa;
   --color-text-muted: #888888;
