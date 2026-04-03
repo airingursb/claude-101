@@ -81,30 +81,48 @@ export default function ToolCallSimulator() {
     setIsAnimating(false);
   };
 
+  const handleTaskComplete = useCallback((taskId: string) => {
+    setCompletedTasks((prev) => {
+      const next = new Set(prev);
+      next.add(taskId);
+
+      if (next.size >= 2 && !hasCompleted) {
+        setHasCompleted(true);
+        setTimeout(() => {
+          if (sceneComplete) sceneComplete();
+        }, 0);
+      }
+
+      return next;
+    });
+  }, [hasCompleted, sceneComplete]);
+
   const handleNextStep = () => {
     if (!selectedTask) return;
 
     if (currentStep < selectedTask.steps.length - 1) {
       if (selectedTask.steps[currentStep + 1].phase === 'execute') {
+        const taskId = selectedTask.id;
+        const totalSteps = selectedTask.steps.length;
         setCurrentStep((s) => s + 1);
         setIsAnimating(true);
         timerRef.current = setTimeout(() => {
-          setCurrentStep((s) => s + 1);
+          setCurrentStep((s) => {
+            const newStep = s + 1;
+            // If this is the last step, mark task as complete
+            if (newStep >= totalSteps - 1) {
+              handleTaskComplete(taskId);
+            }
+            return newStep;
+          });
           setIsAnimating(false);
         }, 1200);
       } else {
         setCurrentStep((s) => s + 1);
       }
     } else {
-      // Task finished
-      const next = new Set(completedTasks);
-      next.add(selectedTask.id);
-      setCompletedTasks(next);
-
-      if (next.size >= 2 && !hasCompleted) {
-        setHasCompleted(true);
-        if (sceneComplete) sceneComplete();
-      }
+      // Task finished (user clicked manually)
+      handleTaskComplete(selectedTask.id);
     }
   };
 
