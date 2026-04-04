@@ -4,6 +4,7 @@ import Narration from '../../components/scene/Narration';
 import ChatBubble from '../../components/scene/ChatBubble';
 import DeepDive from '../../components/scene/DeepDive';
 import PermissionSimulator from '../../components/interactive/ch12/PermissionSimulator';
+import PermissionWaterfall from '../../components/interactive/ch12/PermissionWaterfall';
 import { LanguageProvider, useLanguage } from '../../i18n/LanguageContext';
 
 export default function Ch12Scenes() {
@@ -135,6 +136,20 @@ function Ch12Content() {
             )}
           </p>
         </Narration>
+      </Scene>
+
+      <Scene interactive>
+        <Narration>
+          <p>{t(
+            '每一次工具调用，都要经过一道"权限瀑布"——从上到下，逐层过滤。',
+            'Every tool call passes through a "permission waterfall" — filtered layer by layer, top to bottom.'
+          )}</p>
+          <p>{t(
+            '选择不同的场景，看看请求如何在瀑布中流动——',
+            'Choose different scenarios to see how requests flow through the waterfall —'
+          )}</p>
+        </Narration>
+        <PermissionWaterfall />
       </Scene>
 
       <Scene>

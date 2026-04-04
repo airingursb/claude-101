@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { chapters, getChaptersByCategory } from '../config/chapters';
+import ArchitectureTreemap from '../components/interactive/ArchitectureTreemap';
 const categories = getChaptersByCategory();
 const base = import.meta.env.BASE_URL;
 ---
@@ -36,6 +37,14 @@ const base = import.meta.env.BASE_URL;
         <span data-zh="交互式理解 Claude Code 的工作原理" data-en="Interactively understand how Claude Code works">交互式理解 Claude Code 的工作原理</span>
       </p>
 
+      <div class="hero-features">
+        <span class="hero-feature" data-zh="16 章深度解读" data-en="16 in-depth chapters">16 章深度解读</span>
+        <span class="hero-feature-sep">·</span>
+        <span class="hero-feature" data-zh="真实源码批注" data-en="Annotated real source code">真实源码批注</span>
+        <span class="hero-feature-sep">·</span>
+        <span class="hero-feature" data-zh="交互式可视化" data-en="Interactive visualizations">交互式可视化</span>
+      </div>
+
       <a href={`${base}/chapters/prompt`} class="hero-cta">
         <span data-zh="开始旅程 →" data-en="Start the Journey →">开始旅程 →</span>
       </a>
@@ -49,19 +58,26 @@ const base = import.meta.env.BASE_URL;
             <span class="journey-category__name" data-zh={cat.name} data-en={cat.nameEn}>{cat.name}</span>
           </div>
           <div class="journey-category__chapters">
-            {cat.chapters.map((chapter) => (
+            {cat.chapters.map((chapter) => {
+              const displayIndex = chapters.indexOf(chapter) + 1;
+              return (
               <a href={`${base}/chapters/${chapter.slug}`} class="journey-card">
-                <span class="journey-card__num" style={`color: ${cat.color}`}>{String(chapter.id).padStart(2, '0')}</span>
+                <span class="journey-card__num" style={`color: ${cat.color}`}>{String(displayIndex).padStart(2, '0')}</span>
                 <div class="journey-card__content">
                   <span class="journey-card__title">{chapter.title}</span>
                   <span class="journey-card__sub" data-zh={chapter.subtitle} data-en={chapter.subtitleEn}>{chapter.subtitle}</span>
                 </div>
                 <span class="journey-card__icon">{chapter.icon}</span>
               </a>
-            ))}
+              );
+            })}
           </div>
         </div>
       ))}
+    </section>
+
+    <section class="architecture-section">
+      <ArchitectureTreemap client:visible />
     </section>
 
     <footer class="home-footer">
@@ -203,6 +219,27 @@ const base = import.meta.env.BASE_URL;
     margin: 0 0 32px;
     font-family: var(--font-hand);
     font-size: 22px;
+  }
+
+  .hero-features {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 28px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--color-text-muted);
+  }
+
+  .hero-feature {
+    background: rgba(124, 58, 237, 0.08);
+    padding: 4px 12px;
+    border-radius: 100px;
+    color: var(--color-text-secondary);
+  }
+
+  .hero-feature-sep {
+    opacity: 0.3;
   }
 
   .hero-cta {

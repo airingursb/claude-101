@@ -6,6 +6,149 @@ subtitle: '信任的边界'
 ---
 
 import Ch12Scenes from '../../chapters/ch12/Ch12Scenes';
+import AnnotatedSource from '../../components/interactive/AnnotatedSource';
+
+export const permissionCode = `async function hasPermissionsToUseToolInner(
+  tool: Tool,
+  input: { [key: string]: unknown },
+  context: ToolUseContext,
+): Promise<PermissionDecision> {
+  if (context.abortController.signal.aborted) {
+    throw new AbortError()
+  }
+
+  let appState = context.getAppState()
+
+  // 1a. Entire tool is denied by rule
+  const denyRule = getDenyRuleForTool(
+    appState.toolPermissionContext, tool
+  )
+  if (denyRule) {
+    return {
+      behavior: 'deny',
+      decisionReason: { type: 'rule', rule: denyRule },
+      message: \`Permission to use \${tool.name} denied.\`,
+    }
+  }
+
+  // 1b. Check if tool should always ask for permission
+  const askRule = getAskRuleForTool(
+    appState.toolPermissionContext, tool
+  )
+  if (askRule) {
+    // Sandboxed bash commands can skip ask rules
+    const canSandboxAutoAllow =
+      tool.name === BASH_TOOL_NAME
+      && SandboxManager.isSandboxingEnabled()
+      && shouldUseSandbox(input)
+
+    if (!canSandboxAutoAllow) {
+      return { behavior: 'ask', decisionReason: { type: 'rule', rule: askRule } }
+    }
+  }
+
+  // 1c. Ask tool implementation for permission result
+  let toolPermissionResult: PermissionResult = {
+    behavior: 'passthrough',
+    message: createPermissionRequestMessage(tool.name),
+  }
+  const parsedInput = tool.inputSchema.parse(input)
+  toolPermissionResult = await tool.checkPermissions(parsedInput, context)
+
+  // 1d. Tool implementation denied
+  if (toolPermissionResult?.behavior === 'deny') {
+    return toolPermissionResult
+  }
+
+  // 1f. Content-specific ask rules (e.g. Bash(npm publish:*))
+  if (toolPermissionResult?.behavior === 'ask'
+      && toolPermissionResult.decisionReason?.type === 'rule'
+      && toolPermissionResult.decisionReason.rule.ruleBehavior === 'ask') {
+    return toolPermissionResult
+  }
+
+  // 1g. Safety checks (.git/, .claude/, shell configs)
+  //     bypass-immune — must prompt even in bypassPermissions
+  if (toolPermissionResult?.behavior === 'ask'
+      && toolPermissionResult.decisionReason?.type === 'safetyCheck') {
+    return toolPermissionResult
+  }
+
+  // 2a. Check if mode bypasses permissions
+  appState = context.getAppState()
+  const shouldBypassPermissions =
+    appState.toolPermissionContext.mode === 'bypassPermissions'
+    || (appState.toolPermissionContext.mode === 'plan'
+        && appState.toolPermissionContext.isBypassPermissionsModeAvailable)
+  if (shouldBypassPermissions) {
+    return { behavior: 'allow', decisionReason: { type: 'mode', mode: appState.toolPermissionContext.mode } }
+  }
+
+  // 2b. Entire tool is allowed by rule
+  const alwaysAllowedRule = toolAlwaysAllowedRule(
+    appState.toolPermissionContext, tool
+  )
+  if (alwaysAllowedRule) {
+    return { behavior: 'allow', decisionReason: { type: 'rule', rule: alwaysAllowedRule } }
+  }
+
+  // 3. Convert "passthrough" to "ask" — show user prompt
+  return toolPermissionResult.behavior === 'passthrough'
+    ? { ...toolPermissionResult, behavior: 'ask' }
+    : toolPermissionResult
+}`;
+
+export const permissionAnnotations = [
+  {
+    startLine: 1, endLine: 5,
+    title: '权限瀑布入口', titleEn: 'Permission Waterfall Entry',
+    body: 'hasPermissionsToUseToolInner() 是每次工具调用前的权限决策核心。它接收工具定义、输入参数和上下文，返回一个 PermissionDecision：allow（允许）、deny（拒绝）或 ask（询问用户）。',
+    bodyEn: 'hasPermissionsToUseToolInner() is the core permission decision function called before every tool use. It receives tool definition, input, and context, returning a PermissionDecision: allow, deny, or ask.',
+    color: '#3b82f6',
+  },
+  {
+    startLine: 11, endLine: 20,
+    title: '第一关：Deny 规则', titleEn: 'Gate 1: Deny Rules',
+    body: '权限瀑布的第一关——检查 deny 规则。getDenyRuleForTool() 遍历所有配置层级（Organization > CLI > Local > Project > User）的 deny 规则。一旦匹配，立即返回 deny，不可覆盖。这是安全的最后底线。',
+    bodyEn: 'First gate of the permission waterfall — check deny rules. getDenyRuleForTool() scans deny rules across all config layers (Organization > CLI > Local > Project > User). If matched, immediately returns deny, no override possible. This is the safety floor.',
+    color: '#ef4444',
+  },
+  {
+    startLine: 22, endLine: 37,
+    title: '第二关：Ask 规则', titleEn: 'Gate 2: Ask Rules',
+    body: '检查是否有 ask 规则要求用户确认。特殊处理：如果是 Bash 工具且沙箱已启用，沙箱内的命令可以跳过 ask 规则自动允许——因为沙箱本身提供了安全保障。否则返回 ask 让用户决定。',
+    bodyEn: 'Check if ask rules require user confirmation. Special case: if it is a Bash tool with sandboxing enabled, sandboxed commands can skip ask rules and auto-allow — because the sandbox itself provides safety. Otherwise returns ask for user decision.',
+    color: '#f59e0b',
+  },
+  {
+    startLine: 39, endLine: 46,
+    title: '第三关：工具自身检查', titleEn: 'Gate 3: Tool Self-Check',
+    body: 'tool.checkPermissions() 让每个工具实现自己的权限逻辑。例如 Bash 工具会解析命令内容，检查是否匹配子命令级别的 allow/deny 规则（如 "Bash(npm run *)"）。返回值可以是 allow、deny、ask 或 passthrough（交给后续步骤决定）。',
+    bodyEn: 'tool.checkPermissions() lets each tool implement its own permission logic. For example, Bash tool parses command content and checks sub-command level allow/deny rules (like "Bash(npm run *)"). Returns allow, deny, ask, or passthrough (defer to later steps).',
+    color: '#a855f7',
+  },
+  {
+    startLine: 53, endLine: 63,
+    title: '安全检查：不可绕过', titleEn: 'Safety Checks: Bypass-Immune',
+    body: '两种特殊的 ask 结果不可被任何模式覆盖：内容级 ask 规则（用户显式配置的 "Bash(npm publish:*)" 类规则）和安全检查（.git/、.claude/、shell 配置文件等敏感路径）。即使在 bypassPermissions 模式下也必须弹出确认。',
+    bodyEn: 'Two special ask results that cannot be overridden by any mode: content-specific ask rules (user-configured rules like "Bash(npm publish:*)") and safety checks (sensitive paths like .git/, .claude/, shell configs). Must prompt even in bypassPermissions mode.',
+    color: '#ec4899',
+  },
+  {
+    startLine: 65, endLine: 76,
+    title: '模式检查：bypassPermissions', titleEn: 'Mode Check: bypassPermissions',
+    body: '如果前面的检查都没有做出决定，检查当前权限模式。bypassPermissions 模式直接允许所有操作。注意这在 deny 规则和安全检查之后——即使 bypass 模式也不能绕过 deny 规则和敏感路径保护。',
+    bodyEn: 'If no earlier check made a decision, check the permission mode. bypassPermissions mode allows all operations. Note this comes AFTER deny rules and safety checks — even bypass mode cannot override deny rules and sensitive path protection.',
+    color: '#22c55e',
+  },
+  {
+    startLine: 78, endLine: 87,
+    title: 'Allow 规则与最终回退', titleEn: 'Allow Rules & Final Fallback',
+    body: '检查 allow 规则（如 "Edit"、"Bash(npm run *)"）。如果匹配则允许。如果所有规则都没有做出决定，将 passthrough 转换为 ask——弹出用户确认对话框。这就是权限瀑布的完整流程：deny > ask > tool > safety > bypass > allow > ask user。',
+    bodyEn: 'Check allow rules (like "Edit", "Bash(npm run *)"). If matched, allow. If no rule decided, convert passthrough to ask — show user confirmation dialog. This is the complete permission waterfall: deny > ask > tool > safety > bypass > allow > ask user.',
+    color: '#06b6d4',
+  },
+];
 
 <Ch12Scenes client:only="react" />
 
@@ -87,6 +230,8 @@ Claude Code 提供了五种权限模式，从最严格到最宽松：
 }`}</code></pre>
 
 这里有一个关键规则：**Deny 永远优先于 Allow。** 即使你在 allow 列表中写了 `Bash(rm -rf *)`, 如果 deny 列表中也有它，它仍然会被禁止。这是一个安全底线——deny 规则无法被绕过。
+
+实际上，在源码中这些规则通过一个叫做**权限瀑布（Permission Waterfall）** 的决策流来执行——每次工具调用前，系统按照固定的优先级链逐级判断，直到某一级做出明确的允许或拒绝决定（详见下方「源码探秘」部分）。
 
 模式匹配使用 glob 语法：
 - `*` 匹配任意字符
@@ -279,6 +424,8 @@ Manually confirming every operation is safe but inefficient. Allow/Deny rules le
 
 There is a critical rule here: **Deny always takes priority over Allow.** Even if you put `Bash(rm -rf *)` in the allow list, if the deny list also contains it, the operation will still be blocked. This is a safety floor -- deny rules cannot be overridden.
 
+Under the hood, these rules are evaluated through a **Permission Waterfall** — a fixed-priority decision chain that runs before every tool call, stepping through each level until one makes a definitive allow or deny decision (see the Source Code Deep Dive section below for details).
+
 Pattern matching uses glob syntax:
 - `*` matches any characters
 - `Bash(npm run *)` matches `npm run dev`, `npm run build`, etc.
@@ -389,6 +536,36 @@ The core principle of secure configuration is the **Principle of Least Privilege
 5. **Review regularly.** Update permission configurations as the project evolves
 
 The permission system is not about limiting my capabilities -- it is about letting you **confidently** use my capabilities. With clear boundaries, you can be bolder in letting me work because you know I will not do anything beyond those boundaries. Trust is built step by step, and the permission system is the infrastructure for that process.
+
+</div>
+
+<div class="article-zh">
+
+## 源码探秘
+
+想知道权限瀑布在源码中是如何实现的？以下是 `hasPermissionsToUseToolInner()` 函数的真实源码（精简版）。点击高亮行或右侧批注，阅读每段代码的作用：
+
+<AnnotatedSource
+  client:visible
+  filePath="src/utils/permissions/permissions.ts"
+  code={permissionCode}
+  annotations={permissionAnnotations}
+/>
+
+</div>
+
+<div class="article-en">
+
+## Source Code Deep Dive
+
+Want to see how the permission waterfall actually works? Here is the **actual source code** of `hasPermissionsToUseToolInner()` (simplified). Click highlighted lines or sidebar annotations to read what each section does:
+
+<AnnotatedSource
+  client:visible
+  filePath="src/utils/permissions/permissions.ts"
+  code={permissionCode}
+  annotations={permissionAnnotations}
+/>
 
 </div>
 

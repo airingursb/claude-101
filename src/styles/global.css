@@ -101,3 +101,219 @@
     display: none;
   }
 }
+
+/* =============================================
+   Architecture Treemap
+   ============================================= */
+.architecture-section {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 20px 48px;
+}
+
+.arch-treemap {
+  background: #16162a;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+.arch-treemap__header {
+  padding: 28px 28px 0;
+}
+
+.arch-treemap__title {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: #e0e0e0;
+  margin: 0 0 6px;
+}
+
+.arch-treemap__stats {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #888;
+  margin: 0;
+  letter-spacing: 0.3px;
+}
+
+.arch-treemap__body {
+  padding: 20px 24px 24px;
+  min-height: 200px;
+}
+
+/* ── Grid view ── */
+.arch-treemap__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.arch-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 16px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-sans);
+  transition: background 0.15s, border-color 0.15s;
+  color: inherit;
+}
+
+.arch-block:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--block-color, rgba(255, 255, 255, 0.12));
+}
+
+.arch-block__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.arch-block__name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.arch-block__desc {
+  font-size: 12px;
+  color: #888;
+  line-height: 1.5;
+}
+
+/* ── Detail view ── */
+.arch-detail__header {
+  margin-bottom: 16px;
+}
+
+.arch-detail__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #888;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-bottom: 12px;
+  transition: color 0.15s;
+}
+
+.arch-detail__back:hover {
+  color: var(--color-accent);
+}
+
+.arch-detail__titlerow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.arch-detail__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.arch-detail__name {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: #e0e0e0;
+}
+
+.arch-detail__desc {
+  font-size: 13px;
+  color: #888;
+  margin: 0;
+}
+
+.arch-detail__files {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.arch-file {
+  display: grid;
+  grid-template-columns: 1fr auto 2fr;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border-left: 3px solid var(--block-color, #555);
+  transition: background 0.15s;
+}
+
+.arch-file:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.arch-file__name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: #d0d0d0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.arch-file__size {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #666;
+  white-space: nowrap;
+}
+
+.arch-file__role {
+  font-size: 12px;
+  color: #888;
+  text-align: right;
+}
+
+/* ── Mobile ── */
+@media (max-width: 640px) {
+  .arch-treemap__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .arch-treemap__grid .arch-block {
+    grid-column: span 1 !important;
+  }
+
+  .arch-treemap__header {
+    padding: 20px 20px 0;
+  }
+
+  .arch-treemap__body {
+    padding: 16px 16px 20px;
+  }
+
+  .arch-file {
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+  }
+
+  .arch-file__role {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+}

@@ -6,6 +6,152 @@ subtitle: '思考、行动、观察、重复'
 ---
 
 import Ch04Scenes from '../../chapters/ch04/Ch04Scenes';
+import AnnotatedSource from '../../components/interactive/AnnotatedSource';
+
+export const queryLoopCode = `async function* queryLoop(
+  params: QueryParams,
+  consumedCommandUuids: string[],
+): AsyncGenerator<StreamEvent | Message, Terminal> {
+  // Immutable params — never reassigned during the query loop.
+  const {
+    systemPrompt, userContext, systemContext,
+    canUseTool, fallbackModel, maxTurns,
+  } = params
+
+  // Mutable cross-iteration state.
+  let state: State = {
+    messages: params.messages,
+    toolUseContext: params.toolUseContext,
+    turnCount: 1,
+    transition: undefined,
+    // ... other fields
+  }
+
+  while (true) {
+    let { toolUseContext } = state
+    const { messages, turnCount } = state
+
+    // 1. Build messages for API call
+    let messagesForQuery = [
+      ...getMessagesAfterCompactBoundary(messages)
+    ]
+
+    // 2. Auto-compact if context is too large
+    const { compactionResult } = await deps.autocompact(
+      messagesForQuery, toolUseContext,
+      { systemPrompt, userContext, systemContext },
+    )
+
+    // 3. Assemble full system prompt
+    const fullSystemPrompt = asSystemPrompt(
+      appendSystemContext(systemPrompt, systemContext),
+    )
+
+    // 4. Call Claude API (streaming)
+    const toolUseBlocks: ToolUseBlock[] = []
+    let needsFollowUp = false
+
+    for await (const message of deps.callModel({
+      messages: prependUserContext(
+        messagesForQuery, userContext
+      ),
+      systemPrompt: fullSystemPrompt,
+      tools: toolUseContext.options.tools,
+    })) {
+      // Collect assistant messages and tool_use blocks
+      if (isAssistantMessage(message)) {
+        assistantMessages.push(message)
+        yield message
+      }
+    }
+
+    // 5. Check: any tool_use blocks?
+    if (toolUseBlocks.length === 0) {
+      // No tools → done, return terminal
+      return { reason: 'end_turn' }
+    }
+
+    // 6. Execute tools (with permission checks)
+    needsFollowUp = true
+    for await (const result of runTools(
+      toolUseBlocks, canUseTool, toolUseContext
+    )) {
+      toolResults.push(result)
+      yield result
+    }
+
+    // 7. Inject results into messages, loop again
+    state = {
+      ...state,
+      messages: [
+        ...messages,
+        ...assistantMessages,
+        ...toolResults,
+      ],
+      turnCount: turnCount + 1,
+    }
+    // → back to while(true)
+  }
+}`;
+
+export const queryLoopAnnotations = [
+  {
+    startLine: 1, endLine: 4,
+    title: 'Async Generator 模式', titleEn: 'Async Generator Pattern',
+    body: '整个循环是一个 async generator 函数，通过 yield 逐步输出流事件和消息。调用方可以异步迭代这个 generator，实现流式渲染。返回值 Terminal 表示循环结束的原因。',
+    bodyEn: 'The entire loop is an async generator function, yielding stream events and messages step by step. Callers can async-iterate this generator for streaming rendering. The Terminal return value indicates why the loop ended.',
+    color: '#a855f7',
+  },
+  {
+    startLine: 12, endLine: 18,
+    title: '可变状态对象', titleEn: 'Mutable State Object',
+    body: 'State 对象在循环迭代之间传递。每次 continue 时整体替换（而不是逐字段赋值），确保状态转换的原子性。messages 数组是"真相之源"。',
+    bodyEn: 'The State object carries data between loop iterations. Replaced atomically at each continue site, ensuring atomic state transitions. The messages array is the source of truth.',
+    color: '#3b82f6',
+  },
+  {
+    startLine: 20, endLine: 21,
+    title: 'while(true) — 无限循环', titleEn: 'while(true) — Infinite Loop',
+    body: '核心的无限循环。每一轮：构建消息 → 压缩上下文 → 调用 API → 解析响应 → 执行工具 → 注入结果 → 继续。直到没有 tool_use 块或遇到终止条件才返回。',
+    bodyEn: 'The core infinite loop. Each iteration: build messages → compact context → call API → parse response → execute tools → inject results → continue. Returns only when no tool_use blocks remain or a terminal condition is hit.',
+    color: '#22c55e',
+  },
+  {
+    startLine: 29, endLine: 36,
+    title: '自动上下文压缩', titleEn: 'Auto Context Compaction',
+    body: '在每轮 API 调用前检查上下文是否过大。如果接近窗口上限，自动触发压缩——将早期对话摘要化，释放空间。这是长会话能持续运行的关键。',
+    bodyEn: 'Before each API call, checks if context is too large. If approaching the window limit, triggers auto-compaction — summarizing early conversation to free space. Key to keeping long sessions running.',
+    color: '#f59e0b',
+  },
+  {
+    startLine: 46, endLine: 57,
+    title: '流式 API 调用', titleEn: 'Streaming API Call',
+    body: 'for await 循环流式消费 Claude API 的响应。每收到一条消息就立即 yield 给调用方，实现实时流式渲染。同时收集 tool_use 块，准备下一步的工具执行。',
+    bodyEn: 'The for-await loop streams the Claude API response. Each message is immediately yielded for real-time streaming rendering. tool_use blocks are collected for the next step.',
+    color: '#ec4899',
+  },
+  {
+    startLine: 60, endLine: 63,
+    title: '终止判断', titleEn: 'Termination Check',
+    body: '如果响应中没有 tool_use 块，说明 AI 认为任务已完成或需要用户输入。此时返回 Terminal 对象，循环结束。这是 Agentic Loop 最关键的退出点。',
+    bodyEn: 'If the response has no tool_use blocks, the AI considers the task complete or needs user input. Returns a Terminal object. This is the most critical exit point.',
+    color: '#ef4444',
+  },
+  {
+    startLine: 65, endLine: 72,
+    title: '工具执行', titleEn: 'Tool Execution',
+    body: 'runTools() 是工具执行引擎。它会：检查权限（canUseTool）→ 触发 PreToolUse Hook → 执行工具 → 触发 PostToolUse Hook。读操作并行执行，写操作串行执行。',
+    bodyEn: 'runTools() is the tool execution engine. It: checks permissions (canUseTool) → fires PreToolUse Hook → executes the tool → fires PostToolUse Hook. Reads run in parallel, writes run serially.',
+    color: '#06b6d4',
+  },
+  {
+    startLine: 75, endLine: 83,
+    title: '结果注入 & 继续循环', titleEn: 'Result Injection & Continue',
+    body: '工具结果追加到 messages 数组，turnCount +1，回到 while(true) 顶部。AI 看到工具结果后决定下一步行动——"思考→行动→观察→重复"的完整闭环。',
+    bodyEn: 'Tool results appended to messages, turnCount increments, back to while(true). The AI sees tool results and decides the next action — completing the "Think → Act → Observe → Repeat" cycle.',
+    color: '#f97316',
+  },
+];
 
 <Ch04Scenes client:only="react" />
 
@@ -124,40 +270,16 @@ Round 6 - Think: 任务完成，返回结果
 
 <p>例如，如果 Claude 试图编辑一个文件但发现匹配字符串不唯一，它会自动扩大上下文范围，提供更多的周围代码来精确定位编辑位置。</p>
 
-<h2>伪代码</h2>
+<h2>真实源码：query.ts</h2>
 
-<p>Agentic Loop 的核心逻辑可以用伪代码表示：</p>
+<p>不再是伪代码——这是 Claude Code 中 Agentic Loop 的<strong>真实源码</strong>（精简版）。点击高亮行或右侧批注，阅读每段代码的作用：</p>
 
-<pre><code>{`function agenticLoop(task: string, tools: Tool[]) {
-  let messages = [systemPrompt, userMessage(task)];
-
-  while (true) {
-    // Think: Claude 分析上下文，决定下一步
-    const response = await claude.generate(messages);
-
-    // 检查是否完成
-    if (response.type === "final_answer") {
-      return response.content;  // 任务完成
-    }
-
-    // Act: 执行工具调用
-    if (response.type === "tool_call") {
-      const result = await executeTool(
-        response.toolName,
-        response.toolArgs
-      );
-
-      // Observe: 将结果加入上下文
-      messages.push(assistantMessage(response));
-      messages.push(toolResultMessage(result));
-    }
-
-    // 检查安全限制
-    if (messages.length > MAX_TURNS) {
-      return "达到最大轮次限制";
-    }
-  }
-}`}</code></pre>
+<AnnotatedSource
+  client:visible
+  filePath="src/query.ts"
+  code={queryLoopCode}
+  annotations={queryLoopAnnotations}
+/>
 
 <h2>与简单问答的区别</h2>
 
@@ -298,40 +420,16 @@ Round 6 - Think: Task complete, return results
 
 <p>For example, if Claude tries to edit a file but finds the match string is not unique, it automatically expands the context range, providing more surrounding code to precisely locate the edit position.</p>
 
-<h2>Pseudocode</h2>
+<h2>Real Source Code: query.ts</h2>
 
-<p>The core logic of the Agentic Loop can be expressed in pseudocode:</p>
+<p>No more pseudocode — this is the <strong>actual source code</strong> of Claude Code's Agentic Loop (simplified). Click highlighted lines or sidebar annotations to read what each section does:</p>
 
-<pre><code>{`function agenticLoop(task: string, tools: Tool[]) {
-  let messages = [systemPrompt, userMessage(task)];
-
-  while (true) {
-    // Think: Claude analyzes context, decides next step
-    const response = await claude.generate(messages);
-
-    // Check if done
-    if (response.type === "final_answer") {
-      return response.content;  // Task complete
-    }
-
-    // Act: Execute tool call
-    if (response.type === "tool_call") {
-      const result = await executeTool(
-        response.toolName,
-        response.toolArgs
-      );
-
-      // Observe: Add result to context
-      messages.push(assistantMessage(response));
-      messages.push(toolResultMessage(result));
-    }
-
-    // Safety limits
-    if (messages.length > MAX_TURNS) {
-      return "Maximum turn limit reached";
-    }
-  }
-}`}</code></pre>
+<AnnotatedSource
+  client:visible
+  filePath="src/query.ts"
+  code={queryLoopCode}
+  annotations={queryLoopAnnotations}
+/>
 
 <h2>How This Differs from Simple Q&A</h2>
 
@@ -365,9 +463,9 @@ Round 6 - Think: Task complete, return results
 <span class="chapter-article__nav-label">上一章 / Previous</span>
 <span class="chapter-article__nav-title">Ch.3 Tools</span>
 </a>
-<a href={`${import.meta.env.BASE_URL}chapters/mcp`}>
+<a href={`${import.meta.env.BASE_URL}chapters/message-pipeline`}>
 <span class="chapter-article__nav-label">下一章 / Next</span>
-<span class="chapter-article__nav-title">Ch.5 MCP</span>
+<span class="chapter-article__nav-title">Ch.16 Message Pipeline</span>
 </a>
 </div>
 

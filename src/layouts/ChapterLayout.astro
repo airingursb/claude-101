@@ -46,17 +46,20 @@ const base = import.meta.env.BASE_URL;
             <span data-zh={cat.name} data-en={cat.nameEn}>{cat.name}</span>
           </div>
           <ul class="sidebar__list">
-            {cat.chapters.map((ch) => (
+            {cat.chapters.map((ch) => {
+              const displayIndex = chapters.indexOf(ch) + 1;
+              return (
               <li>
                 <a
                   href={`${base}/chapters/${ch.slug}`}
                   class:list={['sidebar__link', { 'sidebar__link--active': ch.id === chapterNum }]}
                 >
-                  <span class="sidebar__link-num">{String(ch.id).padStart(2, '0')}</span>
+                  <span class="sidebar__link-num">{String(displayIndex).padStart(2, '0')}</span>
                   {ch.title}
                 </a>
               </li>
-            ))}
+              );
+            })}
           </ul>
         </div>
       ))}

@@ -6,6 +6,164 @@ subtitle: '代码库的理解与检索'
 ---
 
 import Ch07Scenes from '../../chapters/ch07/Ch07Scenes';
+import AnnotatedSource from '../../components/interactive/AnnotatedSource';
+
+export const grepToolCode = `async call(
+  {
+    pattern,
+    path,
+    glob,
+    type,
+    output_mode = 'files_with_matches',
+    '-B': context_before,
+    '-A': context_after,
+    '-C': context_c,
+    context,
+    '-n': show_line_numbers = true,
+    '-i': case_insensitive = false,
+    head_limit,
+    offset = 0,
+    multiline = false,
+  },
+  { abortController, getAppState },
+) {
+  const absolutePath = path
+    ? expandPath(path) : getCwd()
+  const args = ['--hidden']
+
+  // Exclude VCS directories to avoid noise
+  for (const dir of VCS_DIRECTORIES_TO_EXCLUDE) {
+    args.push('--glob', \`!\${dir}\`)
+  }
+
+  // Limit line length to prevent base64/minified
+  // content from cluttering output
+  args.push('--max-columns', '500')
+
+  // Only apply multiline flags when requested
+  if (multiline) {
+    args.push('-U', '--multiline-dotall')
+  }
+  if (case_insensitive) args.push('-i')
+
+  // Add output mode flags
+  if (output_mode === 'files_with_matches') {
+    args.push('-l')
+  } else if (output_mode === 'count') {
+    args.push('-c')
+  }
+
+  // Add line numbers if requested
+  if (show_line_numbers && output_mode === 'content') {
+    args.push('-n')
+  }
+
+  // Add context flags
+  if (output_mode === 'content') {
+    if (context !== undefined) {
+      args.push('-C', context.toString())
+    } else {
+      if (context_before !== undefined)
+        args.push('-B', context_before.toString())
+      if (context_after !== undefined)
+        args.push('-A', context_after.toString())
+    }
+  }
+
+  // Handle patterns starting with dash
+  if (pattern.startsWith('-')) {
+    args.push('-e', pattern)
+  } else {
+    args.push(pattern)
+  }
+
+  // Add type and glob filters
+  if (type) args.push('--type', type)
+  if (glob) {
+    for (const g of parseGlobPatterns(glob)) {
+      args.push('--glob', g)
+    }
+  }
+
+  // Add ignore patterns from permissions
+  const ignorePatterns = getFileReadIgnorePatterns(
+    getAppState().toolPermissionContext
+  )
+  for (const p of ignorePatterns) {
+    args.push('--glob', \`!\${p}\`)
+  }
+
+  // Execute ripgrep
+  const results = await ripGrep(
+    args, absolutePath,
+    abortController.signal,
+  )
+
+  // Process results based on output mode
+  if (output_mode === 'content') {
+    const { items, appliedLimit } = applyHeadLimit(
+      results, head_limit, offset,
+    )
+    const finalLines = items.map(line => {
+      const colonIndex = line.indexOf(':')
+      if (colonIndex > 0) {
+        const filePath = line.substring(0, colonIndex)
+        const rest = line.substring(colonIndex)
+        return toRelativePath(filePath) + rest
+      }
+      return line
+    })
+    return { data: { mode: 'content', content:
+      finalLines.join('\\n'), numLines: finalLines.length,
+    }}
+  }
+  // ... count and files_with_matches modes
+}`;
+
+export const grepToolAnnotations = [
+  {
+    startLine: 1, endLine: 21,
+    title: '参数解构', titleEn: 'Parameter Destructuring',
+    body: 'GrepTool 的 call() 方法接收丰富的参数：pattern（正则表达式）、path（搜索路径）、output_mode（输出模式）、上下文行数控制等。这些参数直接映射到 Claude 模型的工具调用参数——模型通过 JSON 传入这些值。',
+    bodyEn: 'GrepTool\'s call() method receives rich parameters: pattern (regex), path (search path), output_mode, context line controls, and more. These map directly to the Claude model\'s tool call parameters — the model passes these values via JSON.',
+    color: '#3b82f6',
+  },
+  {
+    startLine: 25, endLine: 31,
+    title: '排除噪声目录', titleEn: 'Exclude Noise Directories',
+    body: '自动排除 .git、.svn 等版本控制目录，避免搜索结果被元数据污染。--max-columns 限制单行最大长度为 500 字符，防止 base64 编码或压缩文件产生的超长行淹没有用的搜索结果。',
+    bodyEn: 'Automatically excludes .git, .svn and other VCS directories to avoid metadata noise. --max-columns limits lines to 500 characters, preventing base64 or minified files from flooding results with ultra-long lines.',
+    color: '#22c55e',
+  },
+  {
+    startLine: 36, endLine: 49,
+    title: '输出模式构建', titleEn: 'Output Mode Construction',
+    body: '三种输出模式：files_with_matches（-l，只返回文件名）、count（-c，返回匹配计数）、content（返回匹配的行内容）。默认模式是 files_with_matches——这是最省 token 的模式，快速告诉 Claude 哪些文件包含目标模式。',
+    bodyEn: 'Three output modes: files_with_matches (-l, filenames only), count (-c, match counts), content (matching line content). Default is files_with_matches — the most token-efficient mode, quickly telling Claude which files contain the target pattern.',
+    color: '#f59e0b',
+  },
+  {
+    startLine: 78, endLine: 82,
+    title: '权限过滤', titleEn: 'Permission Filtering',
+    body: '从应用状态中获取忽略模式列表，将其转换为 ripgrep 的 --glob 排除参数。这确保了被权限系统标记为不可读的文件（如 .env、credentials）不会出现在搜索结果中。',
+    bodyEn: 'Retrieves ignore patterns from app state and converts them to ripgrep --glob exclusions. This ensures files marked as unreadable by the permission system (like .env, credentials) never appear in search results.',
+    color: '#ef4444',
+  },
+  {
+    startLine: 85, endLine: 88,
+    title: 'ripgrep 调用', titleEn: 'ripgrep Invocation',
+    body: '最终调用 ripgrep（rg）执行搜索。ripgrep 是用 Rust 编写的高性能搜索工具，比传统 grep 快几十倍。abortController.signal 允许 Claude 在用户按 Escape 时中断搜索。',
+    bodyEn: 'Finally calls ripgrep (rg) to execute the search. Ripgrep is a high-performance search tool written in Rust, dozens of times faster than traditional grep. The abortController.signal allows Claude to abort the search when the user presses Escape.',
+    color: '#a855f7',
+  },
+  {
+    startLine: 91, endLine: 103,
+    title: '结果后处理', titleEn: 'Result Post-Processing',
+    body: 'applyHeadLimit 限制返回行数，避免搜索结果过大占用上下文窗口。toRelativePath 将绝对路径转换为相对路径——这能节省大量 token（/Users/john/projects/myapp/src/... 变为 src/...）。',
+    bodyEn: 'applyHeadLimit caps returned lines to avoid search results consuming too much context window. toRelativePath converts absolute paths to relative ones — saving significant tokens (/Users/john/projects/myapp/src/... becomes src/...).',
+    color: '#06b6d4',
+  },
+];
 
 <Ch07Scenes client:only="react" />
 
@@ -323,6 +481,21 @@ Read("src/__tests__/user-service.test.ts")
 // - 错误情况如何处理`}</code></pre>
 
 <p>这些策略不是孤立使用的——在一次真实的任务中，Claude 通常会灵活组合多种策略，就像一个有经验的开发者在新项目中快速建立认知一样。关键原则是：<strong>每一次搜索都有明确目的，每一次读取都在积累上下文</strong>。</p>
+
+<h2>源码探秘</h2>
+
+<p>不再是伪代码——这是 Claude Code 中 GrepTool 的<strong>真实源码</strong>（精简版）。点击高亮行或右侧批注，阅读每段代码的作用：</p>
+
+<AnnotatedSource
+  client:visible
+  filePath="src/tools/GrepTool/GrepTool.ts"
+  code={grepToolCode}
+  annotations={grepToolAnnotations}
+/>
+
+<p><strong>没有向量数据库，没有预建索引</strong>——这一点值得强调。Claude Code 采用的是"Agentic RAG"方式，由 AI 动态决定搜索策略，而非依赖任何预先建好的嵌入索引。</p>
+
+<p><strong>并行搜索</strong>：Claude Code 的工具分区机制允许多个搜索调用并发执行——默认最多可同时发起 10 个 Grep/Glob 调用。这意味着 Claude 不需要一个接一个地搜索，而是可以同时探索多个方向，大幅加速代码理解过程。</p>
 
 </div>
 
@@ -647,6 +820,21 @@ Read("src/__tests__/user-service.test.ts")
 // - How errors are handled`}</code></pre>
 
 <p>These strategies are not used in isolation — in a real task, Claude typically combines multiple strategies flexibly, much like an experienced developer rapidly building understanding in a new project. The key principle is: <strong>every search has a clear purpose, every read accumulates context</strong>.</p>
+
+<h2>Source Code Deep Dive</h2>
+
+<p>No more pseudocode — this is the <strong>actual source code</strong> of Claude Code's GrepTool (simplified). Click highlighted lines or sidebar annotations to read what each section does:</p>
+
+<AnnotatedSource
+  client:visible
+  filePath="src/tools/GrepTool/GrepTool.ts"
+  code={grepToolCode}
+  annotations={grepToolAnnotations}
+/>
+
+<p><strong>No vector database, no pre-built index</strong> — this is worth emphasizing. Claude Code uses an "Agentic RAG" approach where the AI dynamically decides the search strategy, rather than relying on any pre-built embedding index.</p>
+
+<p><strong>Parallel search</strong>: Claude Code's tool partitioning mechanism allows multiple search calls to execute concurrently — up to 10 Grep/Glob calls by default. This means Claude does not have to search one at a time, but can explore multiple directions simultaneously, dramatically accelerating the code comprehension process.</p>
 
 </div>
 

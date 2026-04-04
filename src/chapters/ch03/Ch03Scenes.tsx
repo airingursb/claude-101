@@ -5,6 +5,7 @@ import ChatBubble from '../../components/scene/ChatBubble';
 import DeepDive from '../../components/scene/DeepDive';
 import ToolExplorer from '../../components/interactive/ch03/ToolExplorer';
 import ToolCallSimulator from '../../components/interactive/ch03/ToolCallSimulator';
+import ToolCatalog from '../../components/interactive/ch03/ToolCatalog';
 import { LanguageProvider, useLanguage } from '../../i18n/LanguageContext';
 
 export default function Ch03Scenes() {
@@ -108,6 +109,17 @@ function Ch03Content() {
           <p>{t('选择一个任务，看看工具调用的完整过程：', 'Choose a task and watch the full tool call process:')}</p>
         </Narration>
         <ToolCallSimulator />
+      </Scene>
+
+      <Scene interactive>
+        <Narration>
+          <p>{t(
+            '这是 Claude Code 的完整工具清单——50+ 个内置工具，从文件操作到多智能体协调。',
+            'This is Claude Code\'s complete tool catalog — 50+ built-in tools, from file operations to multi-agent coordination.'
+          )}</p>
+          <p>{t('浏览各个分类，探索每个工具的功能——', 'Browse by category and explore each tool\'s capabilities —')}</p>
+        </Narration>
+        <ToolCatalog />
       </Scene>
 
       <Scene>

@@ -6,6 +6,153 @@ subtitle: '分身术'
 ---
 
 import Ch11Scenes from '../../chapters/ch11/Ch11Scenes';
+import AnnotatedSource from '../../components/interactive/AnnotatedSource';
+
+export const runAgentCode = `export async function* runAgent({
+  agentDefinition,
+  promptMessages,
+  toolUseContext,
+  canUseTool,
+  isAsync,
+  querySource,
+  model,
+  maxTurns,
+  availableTools,
+  allowedTools,
+  override,
+  worktreePath,
+  description,
+}: RunAgentParams): AsyncGenerator<Message, void> {
+
+  const appState = toolUseContext.getAppState()
+  const permissionMode = appState.toolPermissionContext.mode
+
+  const resolvedAgentModel = getAgentModel(
+    agentDefinition.model,
+    toolUseContext.options.mainLoopModel,
+    model,
+    permissionMode,
+  )
+
+  const agentId = override?.agentId ?? createAgentId()
+
+  // Handle message forking for context sharing
+  const contextMessages = forkContextMessages
+    ? filterIncompleteToolCalls(forkContextMessages)
+    : []
+  const initialMessages = [...contextMessages, ...promptMessages]
+
+  // Create isolated file state cache
+  const agentReadFileState = forkContextMessages
+    ? cloneFileStateCache(toolUseContext.readFileState)
+    : createFileStateCacheWithSizeLimit(READ_FILE_STATE_CACHE_SIZE)
+
+  // Resolve user & system context
+  const [baseUserContext, baseSystemContext] = await Promise.all([
+    override?.userContext ?? getUserContext(),
+    override?.systemContext ?? getSystemContext(),
+  ])
+
+  // Read-only agents skip CLAUDE.md to save tokens
+  const shouldOmitClaudeMd = agentDefinition.omitClaudeMd
+    && !override?.userContext
+
+  // Override permission mode if agent defines one
+  const agentGetAppState = () => {
+    const state = toolUseContext.getAppState()
+    let toolPermissionContext = state.toolPermissionContext
+
+    if (agentPermissionMode
+        && state.toolPermissionContext.mode !== 'bypassPermissions'
+        && state.toolPermissionContext.mode !== 'acceptEdits') {
+      toolPermissionContext = {
+        ...toolPermissionContext,
+        mode: agentPermissionMode,
+      }
+    }
+
+    // Scope tool permissions with allowedTools
+    if (allowedTools !== undefined) {
+      toolPermissionContext = {
+        ...toolPermissionContext,
+        alwaysAllowRules: {
+          cliArg: state.toolPermissionContext.alwaysAllowRules.cliArg,
+          session: [...allowedTools],
+        },
+      }
+    }
+
+    return { ...state, toolPermissionContext }
+  }
+
+  // Resolve tools for this agent
+  const resolvedTools = useExactTools
+    ? availableTools
+    : resolveAgentTools(agentDefinition, availableTools, isAsync)
+        .resolvedTools
+
+  // Build agent system prompt
+  const agentSystemPrompt = override?.systemPrompt
+    ? override.systemPrompt
+    : asSystemPrompt(
+        await getAgentSystemPrompt(agentDefinition, ...)
+      )
+
+  // Execute SubagentStart hooks
+  for await (const hookResult of executeSubagentStartHooks(
+    agentId, agentDefinition.agentType, abortSignal
+  )) { /* collect additional contexts */ }
+
+  // Run the query loop (the agent's own Agentic Loop)
+  for await (const message of query({ ... })) {
+    yield message  // Stream results back to parent
+  }
+}`;
+
+export const runAgentAnnotations = [
+  {
+    startLine: 1, endLine: 15,
+    title: 'Async Generator 签名', titleEn: 'Async Generator Signature',
+    body: 'runAgent() 是一个 async generator，通过 yield 将子智能体的消息逐步流式返回给父智能体。参数包括：agentDefinition（智能体定义）、promptMessages（任务提示）、toolUseContext（工具上下文）、canUseTool（权限检查）等。isAsync 决定是否在后台异步运行。',
+    bodyEn: 'runAgent() is an async generator that yields sub-agent messages back to the parent agent via streaming. Parameters include: agentDefinition, promptMessages, toolUseContext, canUseTool, etc. isAsync determines whether it runs in the background.',
+    color: '#a855f7',
+  },
+  {
+    startLine: 17, endLine: 28,
+    title: '模型解析与 ID 分配', titleEn: 'Model Resolution & ID Assignment',
+    body: 'getAgentModel() 按优先级解析模型：智能体自身定义 > 调用方指定 > 主循环模型 > 权限模式默认值。createAgentId() 为每个子智能体生成唯一 ID，用于会话追踪、日志记录和性能分析。',
+    bodyEn: 'getAgentModel() resolves the model by priority: agent definition > caller override > main loop model > permission mode default. createAgentId() generates a unique ID for each sub-agent, used for session tracking, logging, and performance analysis.',
+    color: '#3b82f6',
+  },
+  {
+    startLine: 30, endLine: 44,
+    title: '上下文隔离：消息与文件状态', titleEn: 'Context Isolation: Messages & File State',
+    body: '这是上下文隔离的核心。filterIncompleteToolCalls() 过滤掉父级未完成的工具调用，避免 API 错误。文件状态缓存（readFileState）要么从父级克隆（fork 模式），要么创建全新的空缓存（独立模式）。每个子智能体都有自己独立的文件读取缓存。',
+    bodyEn: 'The core of context isolation. filterIncompleteToolCalls() removes incomplete parent tool calls to avoid API errors. File state cache (readFileState) is either cloned from parent (fork mode) or created fresh (independent mode). Each sub-agent has its own isolated file read cache.',
+    color: '#22c55e',
+  },
+  {
+    startLine: 52, endLine: 54,
+    title: '只读智能体优化', titleEn: 'Read-only Agent Optimization',
+    body: 'Explore 和 Plan 等只读智能体会跳过 CLAUDE.md 的加载。这些智能体不需要项目的提交/PR/lint 规则——主智能体有完整上下文并解读它们的输出。这一优化在全球范围内每周节省约 5-15 Gtok。',
+    bodyEn: 'Read-only agents like Explore and Plan skip loading CLAUDE.md. These agents do not need project commit/PR/lint rules — the main agent has full context and interprets their output. This optimization saves ~5-15 Gtok/week fleet-wide.',
+    color: '#f59e0b',
+  },
+  {
+    startLine: 56, endLine: 77,
+    title: '权限模式覆盖', titleEn: 'Permission Mode Override',
+    body: '子智能体可以有自己的权限模式。但如果父级是 bypassPermissions 或 acceptEdits 模式，则不会被降级覆盖——更高的权限始终优先。allowedTools 限定子智能体只能使用指定的工具，防止父级的权限泄漏到子智能体。',
+    bodyEn: 'Sub-agents can have their own permission mode. But if the parent is in bypassPermissions or acceptEdits mode, it will not be downgraded — higher permissions always take precedence. allowedTools restricts sub-agents to specified tools only, preventing parent permission leakage.',
+    color: '#ec4899',
+  },
+  {
+    startLine: 88, endLine: 97,
+    title: '启动 query 循环', titleEn: 'Start the Query Loop',
+    body: '最终调用 query() 函数——这就是子智能体自己的 Agentic Loop。它拥有独立的系统提示、独立的消息历史、独立的工具集。for await 循环流式消费 query 的输出，每条消息通过 yield 传递回父智能体。当 query 循环结束时，子智能体的使命也就完成了。',
+    bodyEn: 'Finally calls query() — the sub-agent\'s own Agentic Loop. It has independent system prompt, message history, and tool set. The for-await loop streams query output, yielding each message back to the parent agent. When the query loop ends, the sub-agent\'s mission is complete.',
+    color: '#06b6d4',
+  },
+];
 
 <Ch11Scenes client:only="react" />
 
@@ -571,6 +718,36 @@ The subagent's role is **executor**:
 - Results requiring precise contextual understanding rather than summaries
 
 Remember: subagents are not free. Each subagent consumes additional tokens, and creating and waiting for subagents takes time. A good commander knows when to send out clones and when to handle things personally.
+
+</div>
+
+<div class="article-zh">
+
+## 源码探秘
+
+想知道子智能体是如何生成的？以下是 `runAgent()` 函数的真实源码（精简版）。点击高亮行或右侧批注，阅读每段代码的作用：
+
+<AnnotatedSource
+  client:visible
+  filePath="src/tools/AgentTool/runAgent.ts"
+  code={runAgentCode}
+  annotations={runAgentAnnotations}
+/>
+
+</div>
+
+<div class="article-en">
+
+## Source Code Deep Dive
+
+Want to see how sub-agents are spawned? Here is the **actual source code** of `runAgent()` (simplified). Click highlighted lines or sidebar annotations to read what each section does:
+
+<AnnotatedSource
+  client:visible
+  filePath="src/tools/AgentTool/runAgent.ts"
+  code={runAgentCode}
+  annotations={runAgentAnnotations}
+/>
 
 </div>
 

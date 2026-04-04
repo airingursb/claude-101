@@ -6,6 +6,112 @@ subtitle: '定制你的 Claude Code'
 ---
 
 import Ch13Scenes from '../../chapters/ch13/Ch13Scenes';
+import AnnotatedSource from '../../components/interactive/AnnotatedSource';
+
+export const configCode = `// QueryEngine.ts — System prompt assembly
+
+// Memory-mechanics prompt: injected when SDK caller provides
+// custom system prompt AND has set CLAUDE_COWORK_MEMORY_PATH_OVERRIDE
+const memoryMechanicsPrompt =
+  customPrompt !== undefined && hasAutoMemPathOverride()
+    ? await loadMemoryPrompt()
+    : null
+
+// Final system prompt assembly
+const systemPrompt = asSystemPrompt([
+  // Layer 1: Custom prompt OR default system prompt
+  ...(customPrompt !== undefined
+    ? [customPrompt]
+    : defaultSystemPrompt),
+
+  // Layer 2: Memory mechanics (how to use Write/Edit for MEMORY.md)
+  ...(memoryMechanicsPrompt
+    ? [memoryMechanicsPrompt]
+    : []),
+
+  // Layer 3: Append system prompt (CLAUDE.md, hooks, etc.)
+  ...(appendSystemPrompt
+    ? [appendSystemPrompt]
+    : []),
+])
+
+// ── bootstrap/state.ts — Global state initialization ──
+
+type State = {
+  originalCwd: string
+  projectRoot: string        // Set once at startup, never updated
+  totalCostUSD: number
+  totalAPIDuration: number
+  cwd: string
+  modelUsage: { [modelName: string]: ModelUsage }
+  mainLoopModelOverride: ModelSetting | undefined
+  initialMainLoopModel: ModelSetting
+  modelStrings: ModelStrings | null
+  isInteractive: boolean
+  sessionId: SessionId
+  // ... many more fields
+}
+
+// ── Settings hierarchy (onion model) ──
+
+const PERMISSION_RULE_SOURCES = [
+  ...SETTING_SOURCES,  // policySettings, userSettings, projectSettings,
+                       // localSettings, flagSettings
+  'cliArg',            // Command-line arguments
+  'command',           // From skill/command frontmatter
+  'session',           // Runtime session rules
+] as const satisfies readonly PermissionRuleSource[]
+
+export function getAllowRules(
+  context: ToolPermissionContext,
+): PermissionRule[] {
+  // Flatten allow rules from ALL sources (layers)
+  return PERMISSION_RULE_SOURCES.flatMap(source =>
+    (context.alwaysAllowRules[source] || []).map(ruleString => ({
+      source,
+      ruleBehavior: 'allow',
+      ruleValue: permissionRuleValueFromString(ruleString),
+    })),
+  )
+}`;
+
+export const configAnnotations = [
+  {
+    startLine: 1, endLine: 8,
+    title: '记忆机制注入', titleEn: 'Memory Mechanics Injection',
+    body: '系统提示组装的第一步：检查是否需要注入记忆机制的提示。只有当 SDK 调用方同时提供了自定义 prompt 并设置了 CLAUDE_COWORK_MEMORY_PATH_OVERRIDE 环境变量时，才会加载记忆提示——告诉 Claude 如何使用 MEMORY.md 文件。',
+    bodyEn: 'First step of system prompt assembly: check if memory mechanics prompt is needed. Only loaded when SDK caller provides both a custom prompt AND sets CLAUDE_COWORK_MEMORY_PATH_OVERRIDE — teaching Claude how to use the MEMORY.md file.',
+    color: '#a855f7',
+  },
+  {
+    startLine: 10, endLine: 27,
+    title: '系统提示的三层组装', titleEn: 'Three-Layer System Prompt Assembly',
+    body: 'asSystemPrompt() 将三层内容拼接为最终的系统提示：(1) customPrompt 或 defaultSystemPrompt（基础指令），(2) memoryMechanicsPrompt（记忆系统），(3) appendSystemPrompt（CLAUDE.md、Hooks 等附加内容）。这就是为什么 CLAUDE.md 和记忆系统能协同工作——它们被按顺序拼接。',
+    bodyEn: 'asSystemPrompt() concatenates three layers into the final system prompt: (1) customPrompt or defaultSystemPrompt (base instructions), (2) memoryMechanicsPrompt (memory system), (3) appendSystemPrompt (CLAUDE.md, hooks, etc.). This is why CLAUDE.md and memory work together — they are concatenated in order.',
+    color: '#3b82f6',
+  },
+  {
+    startLine: 29, endLine: 44,
+    title: '全局状态类型定义', titleEn: 'Global State Type Definition',
+    body: 'State 类型定义了整个应用的全局状态。projectRoot 在启动时设置一次后不再改变（即使通过 EnterWorktreeTool 切换工作目录）。modelUsage 追踪每个模型的 token 消耗。isInteractive 区分交互模式和打印模式（SDK/CI 场景）。',
+    bodyEn: 'The State type defines the application\'s global state. projectRoot is set once at startup and never changes (even when switching directories via EnterWorktreeTool). modelUsage tracks token consumption per model. isInteractive distinguishes interactive vs print mode (SDK/CI scenarios).',
+    color: '#22c55e',
+  },
+  {
+    startLine: 46, endLine: 54,
+    title: '配置层级源：洋葱模型', titleEn: 'Settings Layer Sources: Onion Model',
+    body: 'PERMISSION_RULE_SOURCES 定义了配置的所有层级来源。SETTING_SOURCES 包含五层设置文件（policySettings > localSettings > projectSettings > userSettings > flagSettings），再加上 cliArg（命令行参数）、command（技能 frontmatter 定义的规则）和 session（运行时会话规则）。',
+    bodyEn: 'PERMISSION_RULE_SOURCES defines all configuration layer sources. SETTING_SOURCES includes five settings file layers (policySettings > localSettings > projectSettings > userSettings > flagSettings), plus cliArg (CLI arguments), command (skill frontmatter rules), and session (runtime session rules).',
+    color: '#f59e0b',
+  },
+  {
+    startLine: 56, endLine: 66,
+    title: '规则扁平化：跨层级合并', titleEn: 'Rule Flattening: Cross-Layer Merge',
+    body: 'getAllowRules() 将所有层级的 allow 规则扁平化为一个数组。每条规则都保留了来源信息（source），这让系统能区分"这条规则来自组织级还是项目级"——在删除规则时需要知道应该修改哪个配置文件。permissionRuleValueFromString() 将字符串（如 "Bash(npm run *)"）解析为结构化的规则值。',
+    bodyEn: 'getAllowRules() flattens allow rules from all layers into a single array. Each rule preserves its source info, letting the system distinguish "this rule came from org level vs project level" — needed when deleting rules to know which config file to modify. permissionRuleValueFromString() parses strings like "Bash(npm run *)" into structured rule values.',
+    color: '#ec4899',
+  },
+];
 
 <Ch13Scenes client:only="react" />
 
@@ -621,10 +727,44 @@ This is how Claude Code works. From Prompt to Configuration, from the first inst
 
 </div>
 
+<div class="article-zh">
+
+## 源码探秘
+
+想知道系统提示是如何组装的、配置层级是如何合并的？以下是 `QueryEngine.ts` 和 `permissions.ts` 的真实源码（精简版）。点击高亮行或右侧批注，阅读每段代码的作用：
+
+<AnnotatedSource
+  client:visible
+  filePath="src/QueryEngine.ts + src/bootstrap/state.ts + src/utils/permissions/permissions.ts"
+  code={configCode}
+  annotations={configAnnotations}
+/>
+
+</div>
+
+<div class="article-en">
+
+## Source Code Deep Dive
+
+Want to see how system prompts are assembled and config layers merge? Here is **actual source code** from `QueryEngine.ts` and `permissions.ts` (simplified). Click highlighted lines or sidebar annotations to read what each section does:
+
+<AnnotatedSource
+  client:visible
+  filePath="src/QueryEngine.ts + src/bootstrap/state.ts + src/utils/permissions/permissions.ts"
+  code={configCode}
+  annotations={configAnnotations}
+/>
+
+</div>
+
 <div class="chapter-article__nav">
 <a href={`${import.meta.env.BASE_URL}chapters/permissions`}>
 <span class="chapter-article__nav-label">上一章 / Previous</span>
 <span class="chapter-article__nav-title">Ch.12 Permissions & Safety</span>
+</a>
+<a href={`${import.meta.env.BASE_URL}chapters/hidden-features`}>
+<span class="chapter-article__nav-label">下一章 / Next</span>
+<span class="chapter-article__nav-title">Ch.15 Hidden Features</span>
 </a>
 </div>
 

@@ -6,6 +6,113 @@ subtitle: '持久化的记忆'
 ---
 
 import Ch06Scenes from '../../chapters/ch06/Ch06Scenes';
+import AnnotatedSource from '../../components/interactive/AnnotatedSource';
+
+export const loadMemoryCode = `export async function loadMemoryPrompt():
+  Promise<string | null> {
+
+  const autoEnabled = isAutoMemoryEnabled()
+
+  // KAIROS daily-log mode takes precedence:
+  // the append-only log paradigm does not compose
+  // with team sync (which expects a shared MEMORY.md).
+  if (feature('KAIROS') && autoEnabled
+      && getKairosActive()) {
+    logMemoryDirCounts(getAutoMemPath(), {
+      memory_type: 'auto',
+    })
+    return buildAssistantDailyLogPrompt(skipIndex)
+  }
+
+  // Cowork injects memory-policy text via env var
+  const coworkExtraGuidelines =
+    process.env.CLAUDE_COWORK_MEMORY_EXTRA_GUIDELINES
+  const extraGuidelines =
+    coworkExtraGuidelines?.trim().length
+      ? [coworkExtraGuidelines]
+      : undefined
+
+  // Team Memory: shared memory across team members
+  if (feature('TEAMMEM')) {
+    if (teamMemPaths!.isTeamMemoryEnabled()) {
+      const autoDir = getAutoMemPath()
+      const teamDir = teamMemPaths!.getTeamMemPath()
+      // Harness guarantees these directories exist
+      // so the model can write without checking.
+      await ensureMemoryDirExists(teamDir)
+      logMemoryDirCounts(autoDir, {
+        memory_type: 'auto',
+      })
+      logMemoryDirCounts(teamDir, {
+        memory_type: 'team',
+      })
+      return teamMemPrompts!.buildCombinedMemoryPrompt(
+        extraGuidelines, skipIndex,
+      )
+    }
+  }
+
+  // Standard auto-memory: personal memory directory
+  if (autoEnabled) {
+    const autoDir = getAutoMemPath()
+    await ensureMemoryDirExists(autoDir)
+    logMemoryDirCounts(autoDir, {
+      memory_type: 'auto',
+    })
+    return buildMemoryLines(
+      'auto memory', autoDir,
+      extraGuidelines, skipIndex,
+    ).join('\\n')
+  }
+
+  // No memory enabled
+  logEvent('tengu_memdir_disabled', {
+    disabled_by_env_var: isEnvTruthy(
+      process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY,
+    ),
+    disabled_by_setting:
+      getInitialSettings().autoMemoryEnabled === false,
+  })
+  return null
+}`;
+
+export const loadMemoryAnnotations = [
+  {
+    startLine: 1, endLine: 4,
+    title: '入口函数', titleEn: 'Entry Function',
+    body: 'loadMemoryPrompt 是记忆系统的入口。它在每次对话开始时被调用，返回一段要注入到系统提示词中的记忆文本。返回 null 表示记忆功能未启用。',
+    bodyEn: 'loadMemoryPrompt is the entry point of the memory system. Called at the start of every conversation, it returns memory text to inject into the system prompt. Returns null when memory is disabled.',
+    color: '#3b82f6',
+  },
+  {
+    startLine: 6, endLine: 17,
+    title: 'KAIROS 日志模式', titleEn: 'KAIROS Daily-Log Mode',
+    body: 'KAIROS 是一种实验性的"每日日志"记忆模式。它采用追加式记录，与团队同步（TEAMMEM）互斥——因为团队同步需要一个双方都可以读写的共享 MEMORY.md，而追加日志不支持这种模式。',
+    bodyEn: 'KAIROS is an experimental "daily log" memory mode using append-only recording. It is mutually exclusive with team sync (TEAMMEM) — team sync requires a shared MEMORY.md that both sides read and write, which does not compose with append-only logs.',
+    color: '#a855f7',
+  },
+  {
+    startLine: 28, endLine: 44,
+    title: '团队记忆', titleEn: 'Team Memory',
+    body: '团队记忆模式下，记忆分为两个目录：autoDir（个人记忆）和 teamDir（团队共享记忆）。ensureMemoryDirExists 确保目录存在，buildCombinedMemoryPrompt 将两者合并为一段提示词。团队成员可以共享项目发现和约定。',
+    bodyEn: 'In team memory mode, memory is split into two directories: autoDir (personal) and teamDir (team-shared). ensureMemoryDirExists ensures the directory exists, and buildCombinedMemoryPrompt merges both into a single prompt. Team members can share project discoveries and conventions.',
+    color: '#22c55e',
+  },
+  {
+    startLine: 47, endLine: 56,
+    title: '个人自动记忆', titleEn: 'Personal Auto Memory',
+    body: '最常见的模式：个人自动记忆。记忆存储在 ~/.claude/projects/<project-slug>/memory/ 目录下。buildMemoryLines 读取目录中的 MEMORY.md 和索引文件，将其转换为可注入的提示词行。',
+    bodyEn: 'The most common mode: personal auto memory. Memory is stored under ~/.claude/projects/<project-slug>/memory/. buildMemoryLines reads MEMORY.md and index files from the directory, converting them into injectable prompt lines.',
+    color: '#f59e0b',
+  },
+  {
+    startLine: 58, endLine: 67,
+    title: '记忆禁用遥测', titleEn: 'Memory Disabled Telemetry',
+    body: '当记忆完全禁用时，记录遥测事件——是环境变量禁用的还是设置项禁用的。这帮助团队了解有多少用户选择不使用记忆功能，以及禁用的原因。',
+    bodyEn: 'When memory is fully disabled, logs a telemetry event tracking whether it was disabled by environment variable or by settings. This helps the team understand how many users opt out of memory and why.',
+    color: '#ef4444',
+  },
+];
 
 <Ch06Scenes client:only="react" />
 
@@ -151,6 +258,21 @@ npm run lint    # 代码检查
 
 <p>正是这套多层记忆系统，让 Claude Code 能够跨越遗忘的鸿沟——虽然每次对话仍然从新的上下文开始，但持久化的记忆确保了关键知识永不丢失。</p>
 
+<h2>源码探秘</h2>
+
+<p>不再是伪代码——这是 Claude Code 中记忆加载的<strong>真实源码</strong>（精简版）。点击高亮行或右侧批注，阅读每段代码的作用：</p>
+
+<AnnotatedSource
+  client:visible
+  filePath="src/memdir/memdir.ts"
+  code={loadMemoryCode}
+  annotations={loadMemoryAnnotations}
+/>
+
+<p><strong>CLAUDE.md 加载器</strong>位于 <code>src/utils/claudemd.ts</code>，负责从项目根目录、<code>~/.claude/</code> 以及 <code>--add-dir</code> 标志指定的额外目录中发现并加载 CLAUDE.md 文件。</p>
+
+<p><strong>记忆大小限制</strong>：MEMORY.md 在加载到提示词时会被截断为最多 200 行或 25KB（以先达到者为准）。这确保了记忆不会占据过多的上下文空间。</p>
+
 </div>
 
 <div class="article-en">
@@ -292,6 +414,21 @@ npm run lint    # Lint code
 </ol>
 
 <p>It is this multi-layered memory system that allows Claude Code to bridge the gap of forgetting — though each conversation still starts with a fresh context, persistent memory ensures critical knowledge is never lost.</p>
+
+<h2>Source Code Deep Dive</h2>
+
+<p>No more pseudocode — this is the <strong>actual source code</strong> of Claude Code's memory loading mechanism (simplified). Click highlighted lines or sidebar annotations to read what each section does:</p>
+
+<AnnotatedSource
+  client:visible
+  filePath="src/memdir/memdir.ts"
+  code={loadMemoryCode}
+  annotations={loadMemoryAnnotations}
+/>
+
+<p>The <strong>CLAUDE.md loader</strong> at <code>src/utils/claudemd.ts</code> discovers and loads CLAUDE.md files from the project root directory, <code>~/.claude/</code>, and additional directories specified by the <code>--add-dir</code> flag.</p>
+
+<p><strong>Memory size limits</strong>: MEMORY.md is truncated to a maximum of 200 lines or 25KB (whichever comes first) when loaded into the prompt. This ensures memory does not consume too much context space.</p>
 
 </div>
 

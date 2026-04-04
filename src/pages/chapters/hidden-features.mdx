@@ -1,0 +1,253 @@
+---
+layout: '../../layouts/ChapterLayout.astro'
+chapter: 15
+title: 'Hidden Features'
+subtitle: '彩蛋与实验性功能'
+---
+
+import Ch15Scenes from '../../chapters/ch15/Ch15Scenes';
+
+export const base = import.meta.env.BASE_URL;
+
+<Ch15Scenes client:only="react" />
+
+<div class="chapter-article">
+
+<hr class="chapter-article__divider" />
+
+<div class="article-zh">
+
+## 幕后的宝藏
+
+Claude Code 的源码中隐藏着许多尚未完全公开或仍在实验阶段的功能。它们代表了 AI 编程助手的未来方向——从持久化助手到远程控制，从自动记忆整理到多智能体协调。
+
+### Kairos：永不下线的 AI 伙伴
+
+**Feature Flag:** `KAIROS` | **状态:** 实验性
+
+Kairos 模式将 Claude Code 从"按需对话"转变为"持久化助手"。开启后：
+
+- Claude Code 持续运行，通过 Channel（如 GitHub Webhook）接收消息
+- 使用 daily-log 记忆模式替代按会话的记录
+- 自动整合记忆，跨会话保持连续性
+- 支持通过 `--session-id` 和 `--continue` 恢复会话
+
+**源码：** `src/bootstrap/state.ts` → `getKairosActive()` / `setKairosActive()`
+
+### AutoDream：自动记忆整理
+
+**Feature Flag:** GrowthBook `tengu_onyx_plover` | **状态:** 已发布
+
+在你不使用 Claude Code 的间隙，AutoDream 在后台自动整理和巩固记忆。触发条件（按成本从低到高依次检查）：
+
+1. **时间门控：** 距离上次整理 ≥ 24 小时
+2. **会话门控：** 自上次整理后有 ≥ 5 个新会话
+3. **锁门控：** 没有其他进程正在整理（文件锁）
+
+整理过程作为只读子代理运行，提取关键记忆并更新记忆文件。包含扫描节流（10 分钟）防止过度轮询。
+
+**源码：** `src/services/autoDream/autoDream.ts` → `executeAutoDream()`
+
+### UltraPlan：远程深度规划
+
+**Feature Flag:** GrowthBook `tengu_ultraplan_model` | **状态:** 已发布
+
+通过 `/ultraplan` 命令，将复杂的规划任务委托给 Claude Code on the Web (CCR)，使用最强大的 Opus 模型进行长时间思考：
+
+- 在 code.claude.com 上启动远程会话
+- 支持用户提供初始计划种子
+- 30 分钟超时的状态轮询
+- 完成后可选择在本地执行或在远程继续
+
+**源码：** `src/commands/ultraplan.tsx` + `src/utils/ultraplan/`
+
+### Coordinator Mode：多智能体协调器
+
+**Feature Flag:** `COORDINATOR_MODE` | **状态:** 实验性
+
+Coordinator 模式让主代理成为指挥官，通过 AgentTool 派遣多个并行 Worker：
+
+- Worker 可以使用完整工具集或精简工具集（`CLAUDE_CODE_SIMPLE=1`）
+- 支持可选的 scratchpad 目录用于跨 Worker 知识共享
+- 任务完成通知使用 `<task-notification>` XML 格式
+
+**源码：** `src/coordinator/coordinatorMode.ts` → `isCoordinatorMode()`
+
+### Bridge：远程控制
+
+**Feature Flag:** `BRIDGE_MODE` | **状态:** 已发布
+
+Bridge 让你从浏览器（claude.ai）、IDE（VS Code、JetBrains）或手机远程控制 Claude Code：
+
+- 注册环境 → 轮询工作请求 → 生成子进程 → 路由 I/O
+- 三种生成模式：`single-session`（一次性）、`worktree`（Git Worktree 隔离）、`same-dir`（共享目录）
+- JWT 认证 + 心跳续租
+
+**源码：** `src/bridge/bridgeMain.ts`（2800+ 行）
+
+### Daemon Mode：后台会话
+
+**状态:** 已发布（团队/群集功能的一部分）
+
+通过 Tmux 或 iTerm2 生成后台子代理会话：
+
+- 后台独立运行完整的 Claude Code 会话
+- 通过 mailbox 文件（Unix socket 抽象）与 Leader 通信
+- Leader 路由权限请求到 ToolUseConfirmQueue
+
+**源码：** `src/utils/swarm/backends/TmuxBackend.ts`
+
+### Buddy：虚拟宠物伙伴
+
+**Feature Flag:** `BUDDY` | **状态:** 已发布（彩蛋）
+
+一个隐藏的动画小精灵，静静地坐在输入框旁边：
+
+- 有 idle、fidget、blink 动画序列
+- 对你说它的名字时会显示对话气泡
+- `/buddy pet` 命令让它冒爱心
+- 支持稀有度颜色编码
+
+**源码：** `src/buddy/CompanionSprite.tsx`（1000+ 行）
+
+### UDS Inbox：进程间通信
+
+**状态:** 已发布（团队基础设施）
+
+基于文件系统 mailbox 的消息队列系统，支持 Leader-Teammate 之间的通信：
+
+- Teammate 每 1 秒轮询一次收件箱
+- 支持权限请求/响应、计划审批、关闭请求等消息类型
+- 去重机制防止重复处理
+- 崩溃恢复通过 mtime 回放
+
+**源码：** `src/hooks/useInboxPoller.ts`（970 行）
+
+---
+
+这些隐藏功能和实验性特性，勾勒出 Claude Code 的终极愿景：不仅仅是一个响应式的编码助手，而是一个**永不下线、自我进化、多端协同的 AI 开发环境**。从 Kairos 的持久化陪伴，到 AutoDream 的自动记忆整理，从 Bridge 的远程控制到 Daemon 的后台执行——每一个功能都在拓展"AI 编程助手"的定义边界。而 Buddy 的存在则提醒我们：即使是最严肃的工程工具，也需要一点温暖和趣味。
+
+</div>
+
+<div class="article-en">
+
+## Treasures Behind the Curtain
+
+Hidden within Claude Code's source are many features not yet fully public or still in experimental stages. They represent the future direction of AI programming assistants — from persistent assistants to remote control, from automatic memory consolidation to multi-agent coordination.
+
+### Kairos: The Always-On AI Companion
+
+**Feature Flag:** `KAIROS` | **Status:** Experimental
+
+Kairos mode transforms Claude Code from "on-demand conversation" to "persistent assistant." When enabled:
+
+- Claude Code runs continuously, receiving messages through Channels (such as GitHub Webhooks)
+- Uses daily-log memory mode instead of per-session records
+- Automatically consolidates memory, maintaining continuity across sessions
+- Supports session resumption via `--session-id` and `--continue`
+
+**Source:** `src/bootstrap/state.ts` → `getKairosActive()` / `setKairosActive()`
+
+### AutoDream: Automatic Memory Consolidation
+
+**Feature Flag:** GrowthBook `tengu_onyx_plover` | **Status:** Shipped
+
+During idle periods when you're not using Claude Code, AutoDream automatically organizes and consolidates memories in the background. Trigger conditions (checked from lowest to highest cost):
+
+1. **Time gate:** At least 24 hours since last consolidation
+2. **Session gate:** At least 5 new sessions since last consolidation
+3. **Lock gate:** No other process is currently consolidating (file lock)
+
+The consolidation runs as a read-only subagent, extracting key memories and updating memory files. Includes scan throttling (10 minutes) to prevent excessive polling.
+
+**Source:** `src/services/autoDream/autoDream.ts` → `executeAutoDream()`
+
+### UltraPlan: Remote Deep Planning
+
+**Feature Flag:** GrowthBook `tengu_ultraplan_model` | **Status:** Shipped
+
+Via the `/ultraplan` command, delegate complex planning tasks to Claude Code on the Web (CCR), using the most powerful Opus model for extended thinking:
+
+- Launches a remote session on code.claude.com
+- Supports user-provided initial plan seeds
+- 30-minute timeout with status polling
+- Upon completion, choose to execute locally or continue remotely
+
+**Source:** `src/commands/ultraplan.tsx` + `src/utils/ultraplan/`
+
+### Coordinator Mode: Multi-Agent Orchestrator
+
+**Feature Flag:** `COORDINATOR_MODE` | **Status:** Experimental
+
+Coordinator mode turns the main agent into a commander, dispatching multiple parallel Workers via AgentTool:
+
+- Workers can use the full toolset or a simplified toolset (`CLAUDE_CODE_SIMPLE=1`)
+- Optional scratchpad directory for cross-Worker knowledge sharing
+- Task completion notifications use `<task-notification>` XML format
+
+**Source:** `src/coordinator/coordinatorMode.ts` → `isCoordinatorMode()`
+
+### Bridge: Remote Control
+
+**Feature Flag:** `BRIDGE_MODE` | **Status:** Shipped
+
+Bridge lets you remotely control Claude Code from a browser (claude.ai), IDE (VS Code, JetBrains), or mobile device:
+
+- Register environment → poll for work requests → spawn subprocess → route I/O
+- Three spawn modes: `single-session` (one-shot), `worktree` (Git Worktree isolation), `same-dir` (shared directory)
+- JWT authentication + heartbeat lease renewal
+
+**Source:** `src/bridge/bridgeMain.ts` (2800+ lines)
+
+### Daemon Mode: Background Sessions
+
+**Status:** Shipped (part of team/swarm features)
+
+Spawn background subagent sessions via Tmux or iTerm2:
+
+- Run complete Claude Code sessions independently in the background
+- Communicate with Leader through mailbox files (Unix socket abstraction)
+- Leader routes permission requests to ToolUseConfirmQueue
+
+**Source:** `src/utils/swarm/backends/TmuxBackend.ts`
+
+### Buddy: Virtual Pet Companion
+
+**Feature Flag:** `BUDDY` | **Status:** Shipped (Easter egg)
+
+A hidden animated sprite that sits quietly beside the input field:
+
+- Has idle, fidget, and blink animation sequences
+- Shows a speech bubble when you say its name
+- `/buddy pet` command makes it emit hearts
+- Supports rarity color coding
+
+**Source:** `src/buddy/CompanionSprite.tsx` (1000+ lines)
+
+### UDS Inbox: Inter-Process Communication
+
+**Status:** Shipped (team infrastructure)
+
+A file-system mailbox-based message queue system supporting Leader-Teammate communication:
+
+- Teammate polls inbox every 1 second
+- Supports permission request/response, plan approval, close request, and other message types
+- Deduplication mechanism prevents duplicate processing
+- Crash recovery via mtime replay
+
+**Source:** `src/hooks/useInboxPoller.ts` (970 lines)
+
+---
+
+These hidden features and experimental capabilities sketch Claude Code's ultimate vision: not merely a reactive coding assistant, but an **always-on, self-evolving, multi-device AI development environment**. From Kairos's persistent companionship to AutoDream's automatic memory consolidation, from Bridge's remote control to Daemon's background execution — each feature pushes the boundaries of what an "AI programming assistant" can be. And Buddy's presence reminds us that even the most serious engineering tools need a touch of warmth and whimsy.
+
+</div>
+
+<div class="chapter-article__nav">
+<a href={`${base}chapters/configuration`}>
+<span class="chapter-article__nav-label">上一章 / Previous</span>
+<span class="chapter-article__nav-title">Ch.13 Configuration</span>
+</a>
+</div>
+
+</div>

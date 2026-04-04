@@ -6,6 +6,133 @@ subtitle: '自动化的触发器'
 ---
 
 import Ch08Scenes from '../../chapters/ch08/Ch08Scenes';
+import AnnotatedSource from '../../components/interactive/AnnotatedSource';
+
+export const hooksCode = `export async function getMatchingHooks(
+  appState: AppState | undefined,
+  sessionId: string,
+  hookEvent: HookEvent,
+  hookInput: HookInput,
+  tools?: Tools,
+): Promise<MatchedHook[]> {
+  const hookMatchers = getHooksConfig(
+    appState, sessionId, hookEvent,
+  )
+
+  // Determine match query based on event type
+  let matchQuery: string | undefined = undefined
+  switch (hookInput.hook_event_name) {
+    case 'PreToolUse':
+    case 'PostToolUse':
+    case 'PostToolUseFailure':
+    case 'PermissionDenied':
+      matchQuery = hookInput.tool_name
+      break
+    case 'SessionStart':
+      matchQuery = hookInput.source
+      break
+    case 'Notification':
+      matchQuery = hookInput.notification_type
+      break
+    case 'FileChanged':
+      matchQuery = basename(hookInput.file_path)
+      break
+    // TaskCreated, TaskCompleted, etc.
+    // → no matchQuery (matches all hooks)
+    default:
+      break
+  }
+
+  // Filter hooks by matcher pattern
+  const filteredMatchers = matchQuery
+    ? hookMatchers.filter(
+        matcher => !matcher.matcher
+          || matchesPattern(matchQuery, matcher.matcher),
+      )
+    : hookMatchers
+
+  // Extract hooks with source context
+  const matchedHooks = filteredMatchers.flatMap(
+    matcher => {
+      const hookSource = matcher.pluginRoot
+        ? \`plugin:\${matcher.pluginName}\`
+        : matcher.skillRoot
+          ? \`skill:\${matcher.skillName}\`
+          : 'settings'
+      return matcher.hooks.map(hook => ({
+        hook,
+        pluginRoot: matcher.pluginRoot,
+        skillRoot: matcher.skillRoot,
+        hookSource,
+      }))
+    },
+  )
+
+  // Deduplicate: same command from multiple config
+  // scopes should only run once
+  const uniqueCommandHooks = Array.from(
+    new Map(
+      matchedHooks
+        .filter(m => m.hook.type === 'command')
+        .map(m => [
+          \`\${m.hook.shell ?? 'bash'}\\0\${m.hook.command}\`,
+          m,
+        ]),
+    ).values(),
+  )
+
+  return [
+    ...uniqueCommandHooks,
+    ...uniquePromptHooks,
+    ...uniqueHttpHooks,
+    ...callbackHooks,
+  ]
+}`;
+
+export const hooksAnnotations = [
+  {
+    startLine: 1, endLine: 7,
+    title: '匹配入口', titleEn: 'Matching Entry Point',
+    body: 'getMatchingHooks 是 Hook 系统的调度入口。每当 Agentic Loop 中发生事件（工具调用前后、会话开始等），都会调用这个函数，传入事件类型和输入数据，获取所有匹配的 Hook 列表。',
+    bodyEn: 'getMatchingHooks is the dispatch entry point of the Hook system. Whenever an event occurs in the Agentic Loop (before/after tool calls, session start, etc.), this function is called with the event type and input data to get all matching Hooks.',
+    color: '#3b82f6',
+  },
+  {
+    startLine: 12, endLine: 33,
+    title: '事件类型分派', titleEn: 'Event Type Dispatch',
+    body: 'switch 语句根据事件类型提取匹配查询字符串。PreToolUse/PostToolUse 使用工具名作为查询（如 "Write"、"Bash"）；FileChanged 使用文件名；TaskCreated 等事件不需要查询——它们匹配所有 Hook。',
+    bodyEn: 'The switch statement extracts a match query string based on event type. PreToolUse/PostToolUse use the tool name as query (e.g., "Write", "Bash"); FileChanged uses the filename; TaskCreated and similar events need no query — they match all Hooks.',
+    color: '#22c55e',
+  },
+  {
+    startLine: 36, endLine: 41,
+    title: '模式匹配过滤', titleEn: 'Pattern Match Filtering',
+    body: '将配置中的 Hook 列表按 matcher 字段过滤。如果 Hook 没有 matcher（省略了），则匹配所有事件。matchesPattern 支持精确匹配和通配符，例如 matcher: "Write" 只匹配 Write 工具调用。',
+    bodyEn: 'Filters the Hook list by the matcher field from config. Hooks without a matcher (omitted) match all events. matchesPattern supports exact match and wildcards, e.g., matcher: "Write" only matches Write tool calls.',
+    color: '#f59e0b',
+  },
+  {
+    startLine: 44, endLine: 57,
+    title: 'Hook 来源追踪', titleEn: 'Hook Source Tracking',
+    body: '每个 Hook 记录它的来源：settings（用户配置）、plugin:xxx（插件提供）或 skill:xxx（技能提供）。来源信息用于日志、遥测和去重——不同来源的同名 Hook 不会互相覆盖。',
+    bodyEn: 'Each Hook records its source: settings (user config), plugin:xxx (from a plugin), or skill:xxx (from a skill). Source info is used for logging, telemetry, and deduplication — same-named Hooks from different sources do not override each other.',
+    color: '#a855f7',
+  },
+  {
+    startLine: 60, endLine: 70,
+    title: 'Hook 去重', titleEn: 'Hook Deduplication',
+    body: '同一个 Hook 命令可能出现在项目级和用户级配置中。去重机制确保同一命令只执行一次——以 shell 类型 + 命令字符串作为去重键。Map 的特性是后插入的覆盖先插入的，即项目级配置优先于用户级。',
+    bodyEn: 'The same Hook command may appear in both project-level and user-level config. Deduplication ensures each command runs only once — using shell type + command string as the dedup key. Map keeps the last inserted entry, so project-level config takes precedence.',
+    color: '#ec4899',
+  },
+  {
+    startLine: 72, endLine: 77,
+    title: '合并返回', titleEn: 'Merged Return',
+    body: '最终将不同类型的 Hook（命令、提示、HTTP、回调）合并为一个数组返回。执行引擎 executeHooks 会并行执行这些 Hook，每个 Hook 有独立的超时控制（默认 30 秒）。',
+    bodyEn: 'Finally merges different Hook types (command, prompt, HTTP, callback) into a single array. The execution engine executeHooks runs them in parallel, each with its own timeout control (default 30 seconds).',
+    color: '#06b6d4',
+  },
+];
 
 <Ch08Scenes client:only="react" />
 
@@ -22,18 +149,32 @@ import Ch08Scenes from '../../chapters/ch08/Ch08Scenes';
 
 ### Hook 的类型
 
-Claude Code 支持以下五种 Hook 事件类型：
+Claude Code 支持丰富的 Hook 事件类型，涵盖会话、工具、压缩、任务、文件和用户交互等多个维度：
 
 <div class="chapter-article__ascii">
-{`┌─────────────────┬──────────────────────────────────────────────┐
-│  Event Type     │  Description                                 │
-├─────────────────┼──────────────────────────────────────────────┤
-│  PreToolUse     │  工具执行前触发，可以拦截或修改工具输入          │
-│  PostToolUse    │  工具执行后触发，可以对工具输出做后处理          │
-│  Notification   │  Claude Code 发送通知时触发                    │
-│  Stop           │  主 Agent 即将结束响应时触发                   │
-│  SubagentStop   │  子 Agent 即将结束响应时触发                   │
-└─────────────────┴──────────────────────────────────────────────┘`}
+{`┌───────────────────┬──────────────────────────────────────────────┐
+│  类别 / Category  │  事件类型 / Event Types                       │
+├───────────────────┼──────────────────────────────────────────────┤
+│  会话 Session     │  SessionStart — 会话开始时触发                 │
+│                   │  SessionEnd — 会话结束时触发                   │
+│                   │  Stop — 主 Agent 即将结束响应时触发            │
+│                   │  SubagentStop — 子 Agent 即将结束响应时触发    │
+├───────────────────┼──────────────────────────────────────────────┤
+│  工具 Tool        │  PreToolUse — 工具执行前触发，可拦截或修改输入  │
+│                   │  PostToolUse — 工具执行后触发，可做后处理       │
+├───────────────────┼──────────────────────────────────────────────┤
+│  压缩 Compaction  │  PreCompact — 上下文压缩前触发                 │
+│                   │  PostCompact — 上下文压缩后触发                │
+├───────────────────┼──────────────────────────────────────────────┤
+│  任务 Task        │  TaskCreated — 任务创建时触发                  │
+│                   │  TaskCompleted — 任务完成时触发                │
+├───────────────────┼──────────────────────────────────────────────┤
+│  文件 File        │  FileChanged — 文件变更时触发                  │
+│                   │  CwdChanged — 工作目录切换时触发               │
+├───────────────────┼──────────────────────────────────────────────┤
+│  用户 User        │  UserPromptSubmit — 用户提交提示词时触发       │
+│                   │  Notification — Claude Code 发送通知时触发     │
+└───────────────────┴──────────────────────────────────────────────┘`}
 </div>
 
 其中最常用的是 **PreToolUse** 和 **PostToolUse**，它们让你在工具调用的前后注入自定义行为。
@@ -181,6 +322,21 @@ Hook 的标准输出（stdout）会被 Claude Code 捕获并反馈给 Claude 模
 - **善用 PostToolUse 做后处理**：格式化、lint、测试等操作放在工具执行之后。
 - **项目级 vs 用户级**：团队共享的规则放在 `.claude/settings.json`，个人偏好放在 `~/.claude/settings.json`。
 
+<h2>源码探秘</h2>
+
+<p>不再是伪代码——这是 Claude Code 中 Hook 匹配和分派的<strong>真实源码</strong>（精简版）。点击高亮行或右侧批注，阅读每段代码的作用：</p>
+
+<AnnotatedSource
+  client:visible
+  filePath="src/utils/hooks.ts"
+  code={hooksCode}
+  annotations={hooksAnnotations}
+/>
+
+<p><strong>执行机制</strong>：Hook 命令在子进程中执行，输入数据以 JSON 格式通过 stdin 传递。输出会被解析为 JSON，其中可以包含 <code>permission_update</code> 字段来动态调整 Claude 的权限行为。</p>
+
+<p><strong>超时控制</strong>：每个 Hook 可以配置独立的超时时间，默认超时为 30 秒。超时后 Hook 进程会被终止，避免阻塞 Claude 的响应。</p>
+
 </div>
 
 <div class="article-en">
@@ -193,20 +349,38 @@ Unlike letting Claude autonomously decide whether to perform an action, Hooks pr
 
 ### Hook Types
 
-Claude Code supports five Hook event types:
+Claude Code supports a rich set of Hook event types, spanning sessions, tools, compaction, tasks, files, and user interactions:
 
 <div class="chapter-article__ascii">
-{`┌─────────────────┬──────────────────────────────────────────────┐
-│  Event Type     │  Description                                 │
-├─────────────────┼──────────────────────────────────────────────┤
-│  PreToolUse     │  Fires before tool execution; can block or   │
-│                 │  modify tool input                           │
-│  PostToolUse    │  Fires after tool execution; post-process    │
-│                 │  tool output                                 │
-│  Notification   │  Fires when Claude Code sends a notification │
-│  Stop           │  Fires when the main agent is about to stop  │
-│  SubagentStop   │  Fires when a subagent is about to stop      │
-└─────────────────┴──────────────────────────────────────────────┘`}
+{`┌───────────────────┬──────────────────────────────────────────────┐
+│  Category         │  Event Types                                 │
+├───────────────────┼──────────────────────────────────────────────┤
+│  Session          │  SessionStart — fires when session begins    │
+│                   │  SessionEnd — fires when session ends         │
+│                   │  Stop — fires when main agent is about to    │
+│                   │    stop responding                            │
+│                   │  SubagentStop — fires when a subagent is     │
+│                   │    about to stop                              │
+├───────────────────┼──────────────────────────────────────────────┤
+│  Tool             │  PreToolUse — fires before tool execution;   │
+│                   │    can block or modify input                  │
+│                   │  PostToolUse — fires after tool execution;   │
+│                   │    post-process output                        │
+├───────────────────┼──────────────────────────────────────────────┤
+│  Compaction       │  PreCompact — fires before context compaction│
+│                   │  PostCompact — fires after context compaction│
+├───────────────────┼──────────────────────────────────────────────┤
+│  Task             │  TaskCreated — fires when a task is created  │
+│                   │  TaskCompleted — fires when a task completes │
+├───────────────────┼──────────────────────────────────────────────┤
+│  File             │  FileChanged — fires when a file changes     │
+│                   │  CwdChanged — fires when working dir changes │
+├───────────────────┼──────────────────────────────────────────────┤
+│  User             │  UserPromptSubmit — fires when user submits  │
+│                   │    a prompt                                   │
+│                   │  Notification — fires when Claude Code sends │
+│                   │    a notification                             │
+└───────────────────┴──────────────────────────────────────────────┘`}
 </div>
 
 The most commonly used are **PreToolUse** and **PostToolUse**, which let you inject custom behavior before and after tool calls.
@@ -354,6 +528,21 @@ A Hook's standard output (stdout) is captured by Claude Code and fed back to the
 - **Use PreToolUse for guardrails**: Deterministically block dangerous operations rather than relying on Claude's judgment.
 - **Use PostToolUse for post-processing**: Put formatting, linting, and testing after tool execution.
 - **Project-level vs user-level**: Team-shared rules go in `.claude/settings.json`; personal preferences go in `~/.claude/settings.json`.
+
+<h2>Source Code Deep Dive</h2>
+
+<p>No more pseudocode — this is the <strong>actual source code</strong> of Claude Code's Hook matching and dispatch mechanism (simplified). Click highlighted lines or sidebar annotations to read what each section does:</p>
+
+<AnnotatedSource
+  client:visible
+  filePath="src/utils/hooks.ts"
+  code={hooksCode}
+  annotations={hooksAnnotations}
+/>
+
+<p><strong>Execution mechanism</strong>: Hook commands run in subprocesses. Input data is passed as JSON via stdin. Output is parsed as JSON and can include a <code>permission_update</code> field to dynamically adjust Claude's permission behavior.</p>
+
+<p><strong>Timeout control</strong>: Each Hook can have its own configurable timeout, with a default of 30 seconds. After timeout, the Hook process is terminated to avoid blocking Claude's response.</p>
 
 </div>
 

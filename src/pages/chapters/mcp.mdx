@@ -6,6 +6,134 @@ subtitle: '连接外部世界'
 ---
 
 import Ch05Scenes from '../../chapters/ch05/Ch05Scenes';
+import AnnotatedSource from '../../components/interactive/AnnotatedSource';
+
+export const mcpCallToolCode = `async function callMCPTool({
+  client: { client, name, config },
+  tool,
+  args,
+  meta,
+  signal,
+  onProgress,
+}: {
+  client: ConnectedMCPServer
+  tool: string
+  args: Record<string, unknown>
+  meta?: Record<string, unknown>
+  signal: AbortSignal
+  onProgress?: (data: MCPProgress) => void
+}): Promise<{
+  content: MCPToolResult
+  _meta?: Record<string, unknown>
+  structuredContent?: Record<string, unknown>
+}> {
+  const toolStartTime = Date.now()
+  let progressInterval: NodeJS.Timeout | undefined
+
+  try {
+    logMCPDebug(name, \`Calling MCP tool: \${tool}\`)
+
+    // Set up progress logging for long-running tools
+    progressInterval = setInterval(() => {
+      const elapsed = Date.now() - toolStartTime
+      logMCPDebug(name,
+        \`Tool '\${tool}' still running (\${elapsed}ms)\`)
+    }, 30000)
+
+    // Use Promise.race with timeout to handle cases
+    // where SDK's internal timeout doesn't work
+    const timeoutMs = getMcpToolTimeoutMs()
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(
+        new Error(\`MCP tool "\${tool}" timed out\`)
+      ), timeoutMs)
+    })
+
+    const result = await Promise.race([
+      client.callTool(
+        {
+          name: tool,
+          arguments: args,
+          _meta: meta,
+        },
+        CallToolResultSchema,
+        {
+          signal,
+          timeout: timeoutMs,
+          onprogress: onProgress
+            ? sdkProgress => {
+                onProgress({
+                  type: 'mcp_progress',
+                  serverName: name,
+                  toolName: tool,
+                  progress: sdkProgress.progress,
+                  total: sdkProgress.total,
+                })
+              }
+            : undefined,
+        },
+      ),
+      timeoutPromise,
+    ])
+
+    if ('isError' in result && result.isError) {
+      throw new MCPToolError(name, tool, result)
+    }
+
+    return {
+      content: result.content as MCPToolResult,
+      _meta: result._meta,
+      structuredContent: result.structuredContent,
+    }
+  } finally {
+    if (progressInterval) clearInterval(progressInterval)
+  }
+}`;
+
+export const mcpCallToolAnnotations = [
+  {
+    startLine: 1, endLine: 10,
+    title: '函数签名', titleEn: 'Function Signature',
+    body: 'callMCPTool 接收已连接的 MCP 服务器实例、工具名称、参数和中断信号。client 对象包含 SDK 客户端实例、服务器名称和配置信息——这些在连接建立阶段就已准备好。',
+    bodyEn: 'callMCPTool takes a connected MCP server instance, tool name, arguments, and abort signal. The client object contains the SDK client instance, server name, and config — all prepared during the connection phase.',
+    color: '#3b82f6',
+  },
+  {
+    startLine: 25, endLine: 31,
+    title: '进度日志', titleEn: 'Progress Logging',
+    body: '每 30 秒记录一次工具运行状态。MCP 工具可能是长时间运行的操作（如数据库迁移、浏览器自动化），进度日志帮助调试超时和卡住的问题。',
+    bodyEn: 'Logs tool running status every 30 seconds. MCP tools can be long-running operations (database migrations, browser automation), and progress logs help debug timeout and hang issues.',
+    color: '#22c55e',
+  },
+  {
+    startLine: 33, endLine: 39,
+    title: '双重超时保护', titleEn: 'Double Timeout Protection',
+    body: 'Promise.race 实现了双重超时机制：SDK 内部有自己的超时，但某些情况下（如 SSE 流中断）SDK 超时不生效。外层超时作为安全网，确保工具调用不会无限挂起。',
+    bodyEn: 'Promise.race implements double timeout protection: the SDK has its own internal timeout, but in some cases (e.g., SSE stream breaks) it does not fire. The outer timeout acts as a safety net ensuring tool calls never hang indefinitely.',
+    color: '#f59e0b',
+  },
+  {
+    startLine: 41, endLine: 63,
+    title: 'JSON-RPC 调用', titleEn: 'JSON-RPC Call',
+    body: 'client.callTool() 是 MCP SDK 的核心方法，它将工具名和参数封装为 JSON-RPC 2.0 请求，通过传输层（stdio/SSE/HTTP）发送给 MCP Server，并等待响应。CallToolResultSchema 用于验证返回值的格式。',
+    bodyEn: 'client.callTool() is the core MCP SDK method. It wraps the tool name and arguments into a JSON-RPC 2.0 request, sends it to the MCP Server via the transport layer (stdio/SSE/HTTP), and awaits the response. CallToolResultSchema validates the return format.',
+    color: '#a855f7',
+  },
+  {
+    startLine: 65, endLine: 67,
+    title: '错误处理', titleEn: 'Error Handling',
+    body: '如果 MCP Server 返回的结果标记了 isError，说明工具在 Server 端执行失败（如 GitHub API 返回 403）。此时抛出 MCPToolError，由上层的 Agentic Loop 捕获并反馈给 Claude 模型。',
+    bodyEn: 'If the MCP Server returns a result with isError flag, the tool failed on the server side (e.g., GitHub API returned 403). MCPToolError is thrown and caught by the Agentic Loop, which feeds it back to the Claude model.',
+    color: '#ef4444',
+  },
+  {
+    startLine: 69, endLine: 73,
+    title: '结果提取', titleEn: 'Result Extraction',
+    body: '成功时返回三部分：content（工具输出内容）、_meta（元数据）和 structuredContent（结构化内容）。content 会被注入到对话消息中，Claude 基于此决定下一步行动。',
+    bodyEn: 'On success, returns three parts: content (tool output), _meta (metadata), and structuredContent (structured content). The content is injected into conversation messages for Claude to decide the next action.',
+    color: '#06b6d4',
+  },
+];
 
 <Ch05Scenes client:only="react" />
 
@@ -104,11 +232,11 @@ import Ch05Scenes from '../../chapters/ch05/Ch05Scenes';
 
 <h2>传输协议</h2>
 
-<p>MCP 支持两种传输方式：</p>
+<p>MCP 支持五种传输方式，覆盖从本地进程到远程服务的各种场景：</p>
 
-<h3>stdio（标准输入/输出）</h3>
+<h3>1. stdio（标准输入/输出）</h3>
 
-<p>用于<strong>本地进程</strong>。Host 直接启动 Server 进程，通过 stdin/stdout 通信。这是最常见的方式——Server 作为子进程运行，无需网络配置。</p>
+<p>通过 <code>StdioClientTransport</code> 实现，用于<strong>本地进程</strong>。Host 直接启动 Server 进程，通过 stdin/stdout 通信。这是最常见的方式——Server 作为子进程运行，无需网络配置。</p>
 
 <pre><code>{`Host                    Server (子进程)
   │                         │
@@ -117,9 +245,9 @@ import Ch05Scenes from '../../chapters/ch05/Ch05Scenes';
   │                         │
   │  (stderr 用于日志输出)    │`}</code></pre>
 
-<h3>SSE（Server-Sent Events）</h3>
+<h3>2. SSE（Server-Sent Events）</h3>
 
-<p>用于<strong>远程服务器</strong>。通过 HTTP 连接到远程 MCP Server，适合团队共享的服务或云端部署的工具。</p>
+<p>通过 <code>SSEClientTransport</code> 实现，用于<strong>远程服务器</strong>。通过 HTTP 连接到远程 MCP Server，适合团队共享的服务或云端部署的工具。这是较早的远程传输方式。</p>
 
 <pre><code>{`{
   "remote-server": {
@@ -129,6 +257,18 @@ import Ch05Scenes from '../../chapters/ch05/Ch05Scenes';
     }
   }
 }`}</code></pre>
+
+<h3>3. HTTP Streamable</h3>
+
+<p>通过 <code>StreamableHTTPClientTransport</code> 实现，是<strong>现代 HTTP 流式传输</strong>方式。相比 SSE，它支持双向流式通信，是远程 MCP Server 的推荐传输方式。</p>
+
+<h3>4. WebSocket</h3>
+
+<p>通过 <code>WebSocketTransport</code> 实现，使用 WebSocket 连接进行全双工通信。适合需要低延迟双向通信的场景。</p>
+
+<h3>5. In-Process（进程内）</h3>
+
+<p>通过 <code>InProcessTransport</code> / <code>SdkControlTransport</code> 实现，用于<strong>SDK 内部调用</strong>。不经过网络或子进程，而是通过直接的函数回调通信。这是 Claude Code SDK 内部使用的传输方式。</p>
 
 <h2>JSON-RPC：底层协议</h2>
 
@@ -191,6 +331,21 @@ import Ch05Scenes from '../../chapters/ch05/Ch05Scenes';
 <h3>安全考虑</h3>
 
 <p>MCP Server 在独立进程中运行，Claude Code 的权限系统同样适用于 MCP 工具调用。敏感操作（如写入数据库、发送消息）会在执行前请求用户确认。API 密钥通过环境变量传递，不会出现在对话上下文中。</p>
+
+<h2>源码探秘</h2>
+
+<p>不再是伪代码——这是 Claude Code 中 MCP 工具调用的<strong>真实源码</strong>（精简版）。点击高亮行或右侧批注，阅读每段代码的作用：</p>
+
+<AnnotatedSource
+  client:visible
+  filePath="src/services/mcp/client.ts"
+  code={mcpCallToolCode}
+  annotations={mcpCallToolAnnotations}
+/>
+
+<p><strong>MCP 客户端管理器</strong>位于 <code>src/services/mcp/client.ts</code>（119KB），是整个 MCP 子系统的核心。它负责服务器生命周期管理、工具调用、资源读取、认证流程和错误恢复。每当你在配置中添加一个 MCP Server，就是这个模块在背后启动进程、建立连接、维持心跳。</p>
+
+<p><strong>工具命名约定</strong>：MCP 工具在 Claude Code 内部以 <code>mcp__&lt;server&gt;__&lt;tool&gt;</code> 的格式命名。例如，GitHub Server 的 <code>create_issue</code> 工具在 Claude 的工具列表中显示为 <code>mcp__github__create_issue</code>。这种前缀机制避免了不同 Server 之间的工具名冲突。</p>
 
 </div>
 
@@ -286,11 +441,11 @@ import Ch05Scenes from '../../chapters/ch05/Ch05Scenes';
 
 <h2>Transport Protocols</h2>
 
-<p>MCP supports two transport methods:</p>
+<p>MCP supports five transport methods, covering scenarios from local processes to remote services:</p>
 
-<h3>stdio (Standard I/O)</h3>
+<h3>1. stdio (Standard I/O)</h3>
 
-<p>Used for <strong>local processes</strong>. The Host directly spawns the Server process and communicates via stdin/stdout. This is the most common approach — the Server runs as a child process with no network configuration needed.</p>
+<p>Implemented via <code>StdioClientTransport</code>, used for <strong>local processes</strong>. The Host directly spawns the Server process and communicates via stdin/stdout. This is the most common approach — the Server runs as a child process with no network configuration needed.</p>
 
 <pre><code>{`Host                    Server (child process)
   │                         │
@@ -299,9 +454,9 @@ import Ch05Scenes from '../../chapters/ch05/Ch05Scenes';
   │                         │
   │  (stderr used for logs)  │`}</code></pre>
 
-<h3>SSE (Server-Sent Events)</h3>
+<h3>2. SSE (Server-Sent Events)</h3>
 
-<p>Used for <strong>remote servers</strong>. Connects to a remote MCP Server via HTTP, suitable for team-shared services or cloud-deployed tools.</p>
+<p>Implemented via <code>SSEClientTransport</code>, used for <strong>remote servers</strong>. Connects to a remote MCP Server via HTTP, suitable for team-shared services or cloud-deployed tools. This is the legacy remote transport method.</p>
 
 <pre><code>{`{
   "remote-server": {
@@ -311,6 +466,18 @@ import Ch05Scenes from '../../chapters/ch05/Ch05Scenes';
     }
   }
 }`}</code></pre>
+
+<h3>3. HTTP Streamable</h3>
+
+<p>Implemented via <code>StreamableHTTPClientTransport</code>, this is the <strong>modern HTTP streaming</strong> transport. Compared to SSE, it supports bidirectional streaming and is the recommended transport for remote MCP Servers.</p>
+
+<h3>4. WebSocket</h3>
+
+<p>Implemented via <code>WebSocketTransport</code>, uses WebSocket connections for full-duplex communication. Suitable for scenarios requiring low-latency bidirectional communication.</p>
+
+<h3>5. In-Process</h3>
+
+<p>Implemented via <code>InProcessTransport</code> / <code>SdkControlTransport</code>, used for <strong>SDK internal calls</strong>. Instead of going through the network or child processes, it communicates via direct function callbacks. This is the transport method used internally by the Claude Code SDK.</p>
 
 <h2>JSON-RPC: The Underlying Protocol</h2>
 
@@ -374,12 +541,27 @@ import Ch05Scenes from '../../chapters/ch05/Ch05Scenes';
 
 <p>MCP Servers run in independent processes, and Claude Code's permission system applies equally to MCP tool calls. Sensitive operations (like writing to a database or sending messages) prompt for user confirmation before execution. API keys are passed via environment variables and never appear in the conversation context.</p>
 
+<h2>Source Code Deep Dive</h2>
+
+<p>No more pseudocode — this is the <strong>actual source code</strong> of Claude Code's MCP tool call mechanism (simplified). Click highlighted lines or sidebar annotations to read what each section does:</p>
+
+<AnnotatedSource
+  client:visible
+  filePath="src/services/mcp/client.ts"
+  code={mcpCallToolCode}
+  annotations={mcpCallToolAnnotations}
+/>
+
+<p>The <strong>MCP client manager</strong> lives at <code>src/services/mcp/client.ts</code> (119KB) and is the heart of the entire MCP subsystem. It handles server lifecycle management, tool calls, resource reading, authentication flows, and error recovery.</p>
+
+<p><strong>Tool naming convention</strong>: MCP tools are internally named using the format <code>mcp__&lt;server&gt;__&lt;tool&gt;</code>. For example, the GitHub Server's <code>create_issue</code> tool appears in Claude's tool list as <code>mcp__github__create_issue</code>. This prefix mechanism prevents tool name conflicts between different Servers.</p>
+
 </div>
 
 <div class="chapter-article__nav">
-<a href={`${import.meta.env.BASE_URL}chapters/agentic-loop`}>
+<a href={`${import.meta.env.BASE_URL}chapters/message-pipeline`}>
 <span class="chapter-article__nav-label">上一章 / Previous</span>
-<span class="chapter-article__nav-title">Ch.4 Agentic Loop</span>
+<span class="chapter-article__nav-title">Ch.16 Message Pipeline</span>
 </a>
 <a href={`${import.meta.env.BASE_URL}chapters/memory`}>
 <span class="chapter-article__nav-label">下一章 / Next</span>

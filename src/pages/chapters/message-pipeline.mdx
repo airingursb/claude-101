@@ -1,0 +1,170 @@
+---
+layout: '../../layouts/ChapterLayout.astro'
+chapter: 16
+title: 'Message Pipeline'
+subtitle: '消息如何流过系统'
+---
+
+export const base = import.meta.env.BASE_URL;
+
+import Ch16Scenes from '../../chapters/ch16/Ch16Scenes';
+
+<Ch16Scenes client:only="react" />
+
+<div class="chapter-article">
+<hr class="chapter-article__divider" />
+
+<div class="article-zh">
+
+## 消息管线：API 调用前的幕后工作
+
+在 Agentic Loop 中，每一轮循环都会向 Claude API 发送一次请求。但消息从内部数据结构到 API 请求体之间，要经过一条复杂的处理管线。
+
+### 六种内部消息类型
+
+Claude Code 内部使用六种消息类型，远比 API 的 `user`/`assistant` 二元分类丰富：
+
+**UserMessage** — 你输入的消息，或工具调用的返回结果。包含 `role: 'user'`、内容（文本或 ContentBlock 数组），以及元数据（uuid、timestamp、toolUseResult、origin 等）。
+
+**AssistantMessage** — 我的回复。包含 `role: 'assistant'`、内容块（文本、tool_use、thinking 等），以及请求 ID、错误信息等元数据。
+
+**SystemMessage** — 系统级通知，有十多个子类型：
+- `SystemCompactBoundaryMessage` — 标记上下文压缩的边界
+- `SystemAPIErrorMessage` — API 错误通知
+- `SystemLocalCommandMessage` — 本地命令执行结果
+- `SystemMemorySavedMessage` — 记忆保存确认
+- `SystemBridgeStatusMessage` — Bridge 连接状态
+- 等等...
+
+**ProgressMessage** — 工具执行过程中的进度更新。携带 `ToolProgressData`，用于在 UI 中展示实时进度。
+
+**AttachmentMessage** — 附件消息，用于 Hook 事件等。携带 `HookAttachment` 数据。
+
+**TombstoneMessage** — "墓碑"标记。当一条消息被删除或废弃时，它不会从数组中移除，而是被替换为墓碑，保持消息索引的稳定性。
+
+### 消息规范化（Normalization）
+
+在发送到 API 之前，消息需要经过规范化处理。这个过程由 `src/utils/messages.ts` 中的 `normalizeMessages()` 函数完成：
+
+**第一步：内容块拆分**
+
+一条包含多个内容块的消息会被拆分为多条独立消息，每条只包含一个内容块。例如，一条同时包含文本和 tool_use 的 AssistantMessage 会被拆分为两条消息。拆分后通过 `deriveUUID()` 生成稳定的派生 UUID。
+
+**第二步：Tool Use/Result 配对**
+
+`ensureToolResultPairing()` 确保每个 `tool_use` 块都有对应的 `tool_result`。如果缺失，会插入占位符：`'[Tool result missing due to internal error]'`。
+
+**第三步：消息重排序**
+
+`reorderMessagesInUI()` 将 tool_use 块与其相关的内容分组：PreToolUse Hook 附件、tool_result 消息、PostToolUse Hook 附件，确保逻辑上相关的消息在一起。
+
+**第四步：连续消息合并**
+
+相邻的同类型消息（如连续的 UserMessage）会被合并，满足 API 对消息交替（user/assistant/user/assistant...）的要求。
+
+### 为什么需要管线？
+
+Claude API 的消息格式有严格要求：
+- user 和 assistant 消息必须交替出现
+- 每个 tool_use 必须有对应的 tool_result
+- 内容必须是规范的 ContentBlock 格式
+
+但在 Claude Code 内部，消息的产生是异步的、无序的——用户输入、工具结果、系统通知、进度更新可能以任意顺序到达。消息管线的职责就是将这些混乱的内部消息转化为 API 期望的规范格式。
+
+### 源码探秘
+
+消息处理的核心在 `src/utils/messages.ts`（4500+ 行），这是 Claude Code 中最大的工具文件之一。关键函数：
+
+- `normalizeMessages()` — 主规范化入口（line 731）
+- `createUserMessage()` — UserMessage 工厂（line 460）
+- `createAssistantMessage()` — AssistantMessage 工厂
+- `deriveUUID()` — 拆分消息时生成稳定的派生 UUID（line 724）
+- `reorderMessagesInUI()` — 消息重排序（line 855）
+
+消息的"真相之源"是 `QueryEngine.mutableMessages: Message[]`，所有消息的增删改都通过这个数组完成。
+
+</div>
+
+<div class="article-en">
+
+## The Message Pipeline: Behind the Scenes Before API Calls
+
+In the Agentic Loop, each iteration sends a request to the Claude API. But between internal data structures and the API request body, messages pass through a complex processing pipeline.
+
+### Six Internal Message Types
+
+Claude Code internally uses six message types, far richer than the API's binary `user`/`assistant` classification:
+
+**UserMessage** — Your input, or tool call return results. Contains `role: 'user'`, content (text or ContentBlock array), and metadata (uuid, timestamp, toolUseResult, origin, etc.).
+
+**AssistantMessage** — My response. Contains `role: 'assistant'`, content blocks (text, tool_use, thinking, etc.), and metadata like request ID and error information.
+
+**SystemMessage** — System-level notifications with over a dozen subtypes:
+- `SystemCompactBoundaryMessage` — Marks context compression boundaries
+- `SystemAPIErrorMessage` — API error notifications
+- `SystemLocalCommandMessage` — Local command execution results
+- `SystemMemorySavedMessage` — Memory save confirmations
+- `SystemBridgeStatusMessage` — Bridge connection status
+- And more...
+
+**ProgressMessage** — Progress updates during tool execution. Carries `ToolProgressData` for displaying real-time progress in the UI.
+
+**AttachmentMessage** — Attachment messages for Hook events and similar. Carries `HookAttachment` data.
+
+**TombstoneMessage** — "Tombstone" markers. When a message is deleted or discarded, it is not removed from the array but replaced with a tombstone, maintaining index stability.
+
+### Message Normalization
+
+Before being sent to the API, messages undergo normalization. This process is handled by the `normalizeMessages()` function in `src/utils/messages.ts`:
+
+**Step 1: Content Block Splitting**
+
+A message containing multiple content blocks is split into multiple independent messages, each containing only one block. For example, an AssistantMessage containing both text and tool_use is split into two messages. After splitting, `deriveUUID()` generates stable derived UUIDs.
+
+**Step 2: Tool Use/Result Pairing**
+
+`ensureToolResultPairing()` ensures every `tool_use` block has a corresponding `tool_result`. If missing, a placeholder is inserted: `'[Tool result missing due to internal error]'`.
+
+**Step 3: Message Reordering**
+
+`reorderMessagesInUI()` groups tool_use blocks with their related content: PreToolUse Hook attachments, tool_result messages, and PostToolUse Hook attachments, ensuring logically related messages stay together.
+
+**Step 4: Consecutive Message Merging**
+
+Adjacent messages of the same type (e.g., consecutive UserMessages) are merged to satisfy the API's requirement for alternating messages (user/assistant/user/assistant...).
+
+### Why Is the Pipeline Needed?
+
+The Claude API has strict message format requirements:
+- User and assistant messages must alternate
+- Every tool_use must have a corresponding tool_result
+- Content must be in canonical ContentBlock format
+
+But internally in Claude Code, messages are generated asynchronously and out of order — user input, tool results, system notifications, and progress updates can arrive in any sequence. The message pipeline's job is to transform this chaotic stream of internal messages into the canonical format the API expects.
+
+### Source Code Deep Dive
+
+The core message processing lives in `src/utils/messages.ts` (4500+ lines), one of the largest utility files in Claude Code. Key functions:
+
+- `normalizeMessages()` — Main normalization entry point (line 731)
+- `createUserMessage()` — UserMessage factory (line 460)
+- `createAssistantMessage()` — AssistantMessage factory
+- `deriveUUID()` — Generates stable derived UUIDs when splitting messages (line 724)
+- `reorderMessagesInUI()` — Message reordering (line 855)
+
+The "source of truth" for messages is `QueryEngine.mutableMessages: Message[]` — all message additions, deletions, and modifications go through this array.
+
+</div>
+
+<div class="chapter-article__nav">
+<a href={`${base}chapters/agentic-loop`}>
+<span class="chapter-article__nav-label">上一章 / Previous</span>
+<span class="chapter-article__nav-title">Ch.4 Agentic Loop</span>
+</a>
+<a href={`${base}chapters/mcp`}>
+<span class="chapter-article__nav-label">下一章 / Next</span>
+<span class="chapter-article__nav-title">Ch.5 MCP</span>
+</a>
+</div>
+
+</div>

@@ -8,6 +8,128 @@ subtitle: '你能看到什么？'
 export const base = import.meta.env.BASE_URL;
 
 import Ch02Scenes from '../../chapters/ch02/Ch02Scenes';
+import AnnotatedSource from '../../components/interactive/AnnotatedSource';
+
+export const ch2Code = `export class QueryEngine {
+  private config: QueryEngineConfig
+  private mutableMessages: Message[]
+  private abortController: AbortController
+  private permissionDenials: SDKPermissionDenial[]
+  private totalUsage: NonNullableUsage
+  private hasHandledOrphanedPermission = false
+  private readFileState: FileStateCache
+  private discoveredSkillNames = new Set<string>()
+  private loadedNestedMemoryPaths = new Set<string>()
+
+  constructor(config: QueryEngineConfig) {
+    this.config = config
+    this.mutableMessages = config.initialMessages ?? []
+    this.abortController =
+      config.abortController ?? createAbortController()
+    this.permissionDenials = []
+    this.readFileState = config.readFileCache
+    this.totalUsage = EMPTY_USAGE
+  }
+
+  async *submitMessage(
+    prompt: string | ContentBlockParam[],
+    options?: { uuid?: string; isMeta?: boolean },
+  ): AsyncGenerator<SDKMessage, void, unknown> {
+    const {
+      cwd, commands, tools, mcpClients,
+      verbose = false, thinkingConfig, maxTurns,
+      canUseTool, customSystemPrompt,
+      userSpecifiedModel, fallbackModel,
+      getAppState, setAppState,
+      // ... more destructured config
+    } = this.config
+
+    this.discoveredSkillNames.clear()
+    setCwd(cwd)
+
+    // Wrap canUseTool to track permission denials
+    const wrappedCanUseTool: CanUseToolFn = async (
+      tool, input, toolUseContext,
+      assistantMessage, toolUseID, forceDecision,
+    ) => {
+      const result = await canUseTool(
+        tool, input, toolUseContext,
+        assistantMessage, toolUseID, forceDecision,
+      )
+      if (result.behavior !== 'allow') {
+        this.permissionDenials.push({
+          tool_name: sdkCompatToolName(tool.name),
+          tool_use_id: toolUseID,
+          tool_input: input,
+        })
+      }
+      return result
+    }
+
+    // Build system prompt from multiple sources
+    const {
+      defaultSystemPrompt,
+      userContext: baseUserContext,
+      systemContext,
+    } = await fetchSystemPromptParts({
+      tools,
+      mainLoopModel: initialMainLoopModel,
+      additionalWorkingDirectories: Array.from(
+        initialAppState.toolPermissionContext
+          .additionalWorkingDirectories.keys(),
+      ),
+      mcpClients,
+      customSystemPrompt: customPrompt,
+    })
+
+    // ... query loop, message accumulation, compaction
+  }
+}`;
+
+export const ch2Annotations = [
+  {
+    startLine: 1, endLine: 1,
+    title: 'QueryEngine 类', titleEn: 'The QueryEngine Class',
+    body: 'QueryEngine 是整个对话生命周期的管理者。每个会话对应一个 QueryEngine 实例，它持有配置、消息历史、权限状态等。submitMessage() 是它唯一的公共入口。',
+    bodyEn: 'QueryEngine manages the full conversation lifecycle. One instance per session, holding config, message history, permission state, etc. submitMessage() is its sole public entry point.',
+    color: '#3b82f6',
+  },
+  {
+    startLine: 3, endLine: 3,
+    title: 'mutableMessages — 真相之源', titleEn: 'mutableMessages — Source of Truth',
+    body: 'mutableMessages 是整个上下文的核心数据结构。所有消息的添加、压缩、截断都通过这个数组进行。它是"可变的"——每次工具调用的结果都会追加到这个数组中，形成不断增长的对话历史。',
+    bodyEn: 'mutableMessages is the core data structure for all context. Every message addition, compaction, and truncation operates on this array. It is mutable — tool results are appended after each call, forming an ever-growing conversation history.',
+    color: '#22c55e',
+  },
+  {
+    startLine: 8, endLine: 9,
+    title: '辅助状态追踪', titleEn: 'Auxiliary State Tracking',
+    body: 'discoveredSkillNames 追踪当前轮次发现了哪些技能；loadedNestedMemoryPaths 记录已加载的嵌套记忆文件路径。这些 Set 在每次 submitMessage 开始时被清空，防止跨轮次的无限增长。',
+    bodyEn: 'discoveredSkillNames tracks skills discovered in the current turn; loadedNestedMemoryPaths records loaded nested memory file paths. These Sets are cleared at each submitMessage start, preventing unbounded growth across turns.',
+    color: '#f59e0b',
+  },
+  {
+    startLine: 11, endLine: 20,
+    title: '构造函数初始化', titleEn: 'Constructor Initialization',
+    body: '构造函数接收完整的配置对象，初始化消息数组（可从已有消息恢复）、中断控制器、权限拒绝记录和文件状态缓存。EMPTY_USAGE 是一个零值用量对象，用于累计 API 调用的 token 消耗。',
+    bodyEn: 'Constructor takes the full config, initializing the message array (resumable from existing messages), abort controller, permission denial log, and file state cache. EMPTY_USAGE is a zero-value usage object for accumulating API token consumption.',
+    color: '#a855f7',
+  },
+  {
+    startLine: 22, endLine: 26,
+    title: 'Async Generator 入口', titleEn: 'Async Generator Entry',
+    body: 'submitMessage 是一个 async generator——它 yield 出 SDKMessage 事件流，调用方可以异步迭代实现流式渲染。每次调用代表一个新的对话轮次（turn），但状态在轮次间持久化。',
+    bodyEn: 'submitMessage is an async generator — it yields an SDKMessage event stream for async iteration and streaming rendering. Each call represents a new conversation turn, but state persists across turns.',
+    color: '#ec4899',
+  },
+  {
+    startLine: 56, endLine: 68,
+    title: '系统提示词组装', titleEn: 'System Prompt Assembly',
+    body: 'fetchSystemPromptParts() 从多个来源组装系统提示词：核心指令、工具描述、记忆文件、CLAUDE.md 等。返回三个部分：默认系统提示词、用户上下文（git 状态等）和系统上下文（环境信息）。这些在每次查询前重新构建，确保反映最新状态。',
+    bodyEn: 'fetchSystemPromptParts() assembles the system prompt from multiple sources: core instructions, tool descriptions, memory files, CLAUDE.md, etc. Returns three parts: default system prompt, user context (git status, etc.), and system context (env info). Rebuilt before each query to reflect current state.',
+    color: '#06b6d4',
+  },
+];
 
 <Ch02Scenes client:only="react" />
 
@@ -150,7 +272,7 @@ CLAUDE.md (项目 + 用户):           ~2,000 tokens
 
 ### Auto-Compact 触发时机
 
-Auto-compact 在上下文使用量接近窗口上限时自动触发。你不需要手动干预——Claude Code 会在后台完成压缩，然后继续工作。你唯一会注意到的是对话中出现一条系统消息，提示上下文已被压缩。
+Auto-compact 在上下文使用量接近窗口上限时自动触发。具体来说，源码中定义了几个关键阈值：当剩余空间不足约 <strong>13,000 tokens</strong> 时触发自动压缩缓冲区，当剩余约 <strong>20,000 tokens</strong> 时显示警告，而当剩余仅约 <strong>3,000 tokens</strong> 时则触发硬限制。你不需要手动干预——Claude Code 会在后台完成压缩，然后继续工作。你唯一会注意到的是对话中出现一条系统消息，提示上下文已被压缩。
 
 压缩是有损的——一些细节会丢失。这就是为什么在处理复杂任务时，保持每条指令的独立性和完整性很重要。如果压缩后 AI "忘记"了某些细节，可以重新提供关键信息。
 
@@ -201,6 +323,17 @@ Claude Code 会从多个位置查找 CLAUDE.md 文件：
 **冲突的上下文会导致困惑**。如果 CLAUDE.md 说 "使用 spaces 缩进"，但当前文件全是 tabs，我需要做判断。通常，更具体的指令优先。
 
 > 上下文窗口就是我的全部世界。我无法记住上一次对话的内容，也无法访问没有被加载进来的文件。你给我看什么，就决定了我能做什么。
+
+<h2>源码探秘</h2>
+
+<p>不再是伪代码——这是 Claude Code 中上下文管理核心 <code>QueryEngine</code> 的<strong>真实源码</strong>（精简版）。点击高亮行或右侧批注，阅读每段代码的作用：</p>
+
+<AnnotatedSource
+  client:visible
+  filePath="src/QueryEngine.ts"
+  code={ch2Code}
+  annotations={ch2Annotations}
+/>
 
 </div>
 
@@ -341,7 +474,7 @@ After compaction:
 
 ### Auto-Compact Trigger
 
-Auto-compact fires automatically when context usage approaches the window limit. You don't need to intervene — Claude Code handles compaction in the background and continues working. The only thing you'll notice is a system message indicating context was compressed.
+Auto-compact fires automatically when context usage approaches the window limit. Specifically, the source code defines several key thresholds: auto-compact triggers when roughly <strong>13,000 tokens</strong> of buffer space remain, a warning appears at around <strong>20,000 tokens</strong> remaining, and a hard limit kicks in at approximately <strong>3,000 tokens</strong> remaining. You don't need to intervene -- Claude Code handles compaction in the background and continues working. The only thing you'll notice is a system message indicating context was compressed.
 
 Compaction is lossy -- some details are lost. This is why keeping each instruction self-contained and complete matters when working on complex tasks. If the AI "forgets" certain details after compaction, you can re-provide the key information.
 
@@ -393,12 +526,23 @@ Context is not just an accumulation of information -- it directly influences my 
 
 > The context window is my entire world. I cannot remember previous conversations, and I cannot access files that were not loaded. What you show me determines what I can do.
 
+<h2>Source Code Deep Dive</h2>
+
+<p>No more pseudocode -- this is the <strong>actual source code</strong> of Claude Code's context management core, <code>QueryEngine</code> (simplified). Click highlighted lines or sidebar annotations to read what each section does:</p>
+
+<AnnotatedSource
+  client:visible
+  filePath="src/QueryEngine.ts"
+  code={ch2Code}
+  annotations={ch2Annotations}
+/>
+
 </div>
 
 <div class="chapter-article__nav">
-<a href={`${base}chapters/prompt`}>
+<a href={`${base}chapters/system-prompt`}>
 <span class="chapter-article__nav-label">Previous</span>
-<span class="chapter-article__nav-title">Prompt</span>
+<span class="chapter-article__nav-title">System Prompt</span>
 </a>
 <a href={`${base}chapters/tools`}>
 <span class="chapter-article__nav-label">Next</span>

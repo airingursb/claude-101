@@ -6,6 +6,117 @@ subtitle: '打包你的超能力'
 ---
 
 import Ch10Scenes from '../../chapters/ch10/Ch10Scenes';
+import AnnotatedSource from '../../components/interactive/AnnotatedSource';
+
+export const pluginCode = `export async function installPluginOp(
+  plugin: string,
+  scope: InstallableScope = 'user',
+): Promise<PluginOperationResult> {
+  assertInstallableScope(scope)
+
+  const { name: pluginName, marketplace: marketplaceName } =
+    parsePluginIdentifier(plugin)
+
+  // ── Search materialized marketplaces for the plugin ──
+  let foundPlugin: PluginMarketplaceEntry | undefined
+  let foundMarketplace: string | undefined
+
+  if (marketplaceName) {
+    // Exact marketplace lookup
+    const pluginInfo = await getPluginById(plugin)
+    if (pluginInfo) {
+      foundPlugin = pluginInfo.entry
+      foundMarketplace = marketplaceName
+    }
+  } else {
+    // Search all known marketplaces
+    const marketplaces = await loadKnownMarketplacesConfig()
+    for (const [mktName, mktConfig] of Object.entries(marketplaces)) {
+      const marketplace = await getMarketplace(mktName)
+      const pluginEntry = marketplace.plugins.find(
+        p => p.name === pluginName
+      )
+      if (pluginEntry) {
+        foundPlugin = pluginEntry
+        foundMarketplace = mktName
+        break
+      }
+    }
+  }
+
+  if (!foundPlugin || !foundMarketplace) {
+    return {
+      success: false,
+      message: \`Plugin "\${pluginName}" not found\`,
+    }
+  }
+
+  const pluginId = \`\${foundPlugin.name}@\${foundMarketplace}\`
+
+  // Install: write settings + cache plugin files
+  const result = await installResolvedPlugin({
+    pluginId,
+    entry: foundPlugin,
+    scope,
+    marketplaceInstallLocation,
+  })
+
+  if (!result.ok) {
+    return { success: false, message: formatResolutionError(result) }
+  }
+
+  return {
+    success: true,
+    message: \`Installed \${foundPlugin.name}\`,
+    pluginId,
+    scope,
+  }
+}`;
+
+export const pluginAnnotations = [
+  {
+    startLine: 1, endLine: 4,
+    title: '安装入口函数', titleEn: 'Install Entry Function',
+    body: 'installPluginOp() 是插件安装的核心入口。它接受插件标识符（如 "testing-plugin" 或 "testing-plugin@marketplace"）和安装作用域（user/project/local）。这是一个纯库函数——不调用 process.exit()，不写 console，只返回结果对象。',
+    bodyEn: 'installPluginOp() is the core entry point for plugin installation. It accepts a plugin identifier (e.g., "testing-plugin" or "testing-plugin@marketplace") and install scope (user/project/local). This is a pure library function — no process.exit(), no console output, only returns result objects.',
+    color: '#3b82f6',
+  },
+  {
+    startLine: 6, endLine: 8,
+    title: '解析插件标识符', titleEn: 'Parse Plugin Identifier',
+    body: 'parsePluginIdentifier() 将插件字符串解析为名称和市场两部分。格式为 "name@marketplace"，其中 marketplace 部分是可选的。如果不指定 marketplace，系统会搜索所有已知市场。',
+    bodyEn: 'parsePluginIdentifier() splits the plugin string into name and marketplace parts. Format is "name@marketplace" where marketplace is optional. Without a marketplace, all known marketplaces are searched.',
+    color: '#22c55e',
+  },
+  {
+    startLine: 10, endLine: 37,
+    title: '市场搜索策略', titleEn: 'Marketplace Search Strategy',
+    body: '两种搜索路径：如果指定了 marketplace，直接通过 getPluginById() 精确查找；否则，遍历所有已知市场（loadKnownMarketplacesConfig()），在每个市场的插件列表中按名称匹配。找到第一个匹配就停止搜索（break）。',
+    bodyEn: 'Two search paths: if marketplace is specified, exact lookup via getPluginById(); otherwise, iterate all known marketplaces (loadKnownMarketplacesConfig()), matching by name in each marketplace plugin list. Stops at first match (break).',
+    color: '#f59e0b',
+  },
+  {
+    startLine: 39, endLine: 43,
+    title: '未找到处理', titleEn: 'Not Found Handling',
+    body: '如果在所有市场中都找不到插件，返回失败结果。注意这是一个纯数据返回（不抛异常），调用方可以据此向用户展示友好的错误信息。',
+    bodyEn: 'If the plugin is not found in any marketplace, return a failure result. Note this is a pure data return (no exception thrown), allowing callers to show friendly error messages.',
+    color: '#ef4444',
+  },
+  {
+    startLine: 45, endLine: 55,
+    title: 'Settings-First 安装策略', titleEn: 'Settings-First Install Strategy',
+    body: '插件 ID 格式为 "name@marketplace"。installResolvedPlugin() 执行 settings-first 策略：先写入 settings.json（声明意图），再缓存插件文件（物质化）。即使缓存失败，启动时的 reconcile 机制也会修复未物质化的插件。',
+    bodyEn: 'Plugin ID format is "name@marketplace". installResolvedPlugin() follows settings-first strategy: write settings.json first (declare intent), then cache plugin files (materialization). Even if caching fails, startup reconciliation repairs unmaterialized plugins.',
+    color: '#a855f7',
+  },
+  {
+    startLine: 57, endLine: 64,
+    title: '返回操作结果', titleEn: 'Return Operation Result',
+    body: '成功时返回插件 ID 和作用域信息。PluginOperationResult 是一个统一的结果类型，所有插件操作（安装、卸载、启用、禁用、更新）都使用相同的返回格式，让 CLI 和 UI 都能一致地处理结果。',
+    bodyEn: 'On success, returns plugin ID and scope info. PluginOperationResult is a unified result type — all plugin operations (install, uninstall, enable, disable, update) use the same return format, allowing both CLI and UI to handle results consistently.',
+    color: '#06b6d4',
+  },
+];
 
 <Ch10Scenes client:only="react" />
 
@@ -453,6 +564,36 @@ Plugins are the highest-level abstraction in Claude Code's extension ecosystem:
 </div>
 
 From low-level tool calls, to the MCP protocol at the middle layer, to Hook automation and Skill workflow encapsulation, and finally Plugins packaging everything together — this forms Claude Code's complete capability extension system.
+
+</div>
+
+<div class="article-zh">
+
+## 源码探秘
+
+想知道插件安装在源码中是如何实现的？以下是 `installPluginOp()` 函数的真实源码（精简版）。点击高亮行或右侧批注，阅读每段代码的作用：
+
+<AnnotatedSource
+  client:visible
+  filePath="src/services/plugins/pluginOperations.ts"
+  code={pluginCode}
+  annotations={pluginAnnotations}
+/>
+
+</div>
+
+<div class="article-en">
+
+## Source Code Deep Dive
+
+Want to see how plugin installation actually works? Here is the **actual source code** of `installPluginOp()` (simplified). Click highlighted lines or sidebar annotations to read what each section does:
+
+<AnnotatedSource
+  client:visible
+  filePath="src/services/plugins/pluginOperations.ts"
+  code={pluginCode}
+  annotations={pluginAnnotations}
+/>
 
 </div>
 

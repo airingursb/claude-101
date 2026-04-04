@@ -1,58 +1,80 @@
 # Claude 101
 
-> An interactive learning website that explains how Claude Code works — from AI's first-person perspective.
+> An interactive learning website that explains how Claude Code works — from AI's first-person perspective, with **annotated real source code** and interactive visualizations.
 
 **[Live Demo](https://airingursb.github.io/claude-101/)**
+
+## Features
+
+- **16 in-depth chapters** covering every aspect of Claude Code's architecture
+- **Annotated source code** — real code from Claude Code's `src/`, with line-by-line sidebar annotations explaining key mechanisms
+- **Interactive visualizations** — Agent Loop step-by-step animation, Permission Waterfall simulator, Tool Catalog browser, Architecture Treemap, and more
+- **Bilingual** — full Chinese / English toggle
+- **AI first-person narrative** — learn how Claude Code works by seeing through its eyes
 
 ## Chapters
 
 ### Fundamentals
 
-| # | Topic | Description |
-|---|-------|-------------|
-| 01 | **Prompt** | Your first instruction |
-| 02 | **Context** | What can you see? |
+| # | Topic | Source Code Highlight |
+|---|-------|---------------------|
+| 01 | **Prompt** | `getSystemPrompt()` — how the ~12K token system prompt is built |
+| 02 | **System Prompt** | `fetchSystemPromptParts()` — the 6-layer assembly process |
+| 03 | **Context** | `QueryEngine` class — conversation state & mutableMessages |
 
 ### Tools & Execution
 
-| # | Topic | Description |
-|---|-------|-------------|
-| 03 | **Tools** | You now have hands and feet |
-| 04 | **Agentic Loop** | Think, act, observe, repeat |
-| 05 | **MCP** | Connecting to the outside world |
+| # | Topic | Source Code Highlight |
+|---|-------|---------------------|
+| 04 | **Tools** | `getAllBaseTools()` — 50+ tool registry with feature flags |
+| 05 | **Agentic Loop** | `queryLoop()` — the core while(true) async generator |
+| 06 | **Message Pipeline** | Message normalization — 6 internal message types |
+| 07 | **MCP** | `callMCPTool()` — JSON-RPC dispatch to MCP servers |
 
 ### Memory & Knowledge
 
-| # | Topic | Description |
-|---|-------|-------------|
-| 06 | **Memory** | Persistent memory |
-| 07 | **Codebase Intelligence** | Understanding & searching your codebase |
+| # | Topic | Source Code Highlight |
+|---|-------|---------------------|
+| 08 | **Memory** | `loadMemoryPrompt()` — MEMORY.md loading & 200-line truncation |
+| 09 | **Codebase Intelligence** | `GrepTool.call()` — ripgrep-powered Agentic RAG |
 
 ### Extensions
 
-| # | Topic | Description |
-|---|-------|-------------|
-| 08 | **Hooks** | Automated triggers |
-| 09 | **Skills** | Reusable superpowers |
-| 10 | **Plugins** | Package your superpowers |
+| # | Topic | Source Code Highlight |
+|---|-------|---------------------|
+| 10 | **Hooks** | `getMatchingHooks()` — event-driven hook matching & dispatch |
+| 11 | **Skills** | `SkillTool.call()` — slash command loading & invocation |
+| 12 | **Plugins** | `installPluginOp()` — plugin lifecycle & marketplace |
 
 ### Collaboration & Governance
 
-| # | Topic | Description |
-|---|-------|-------------|
-| 11 | **Agents & Subagents** | The art of cloning |
-| 12 | **Permissions & Safety** | The boundaries of trust |
-| 13 | **Configuration** | Customize your Claude Code |
+| # | Topic | Source Code Highlight |
+|---|-------|---------------------|
+| 13 | **Agents & Subagents** | `runAgent()` — subagent spawning with isolated QueryEngine |
+| 14 | **Permissions & Safety** | Permission Waterfall — 5-stage deny→allow→validate→classify→prompt |
+| 15 | **Configuration** | Settings onion model — 5-layer config hierarchy |
+| 16 | **Hidden Features** | Kairos, AutoDream, UltraPlan, Bridge, Buddy & more |
+
+## Interactive Components
+
+| Component | Chapter | Description |
+|-----------|---------|-------------|
+| `AgenticLoopViz` | Ch5 | 11-step animated walkthrough with playback controls |
+| `PermissionWaterfall` | Ch14 | 5-stage waterfall with 4 preset scenarios |
+| `PromptAssembler` | Ch2 | 6-layer system prompt assembly animation |
+| `ToolCatalog` | Ch4 | Browseable catalog of 54 tools by category |
+| `ArchitectureTreemap` | Home | Claude Code source structure explorer |
+| `AnnotatedSource` | All | Real source code with sidebar annotations |
 
 ## Tech Stack
 
 - **Framework**: [Astro](https://astro.build/) (Island Architecture)
-- **Interactive Components**: [React](https://react.dev/) (`client:only="react"`)
+- **Interactive Components**: [React](https://react.dev/) (`client:visible` / `client:only="react"`)
 - **Content**: MDX + custom Scene Engine
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) v4 + CSS Variables (dark theme)
-- **Animation**: [Framer Motion](https://www.framer.com/motion/) + [GSAP](https://gsap.com/) + SVG animations
+- **Animation**: [Framer Motion](https://www.framer.com/motion/) + [GSAP](https://gsap.com/)
 - **Language**: TypeScript (strict)
-- **i18n**: Chinese / English toggle (React Context + localStorage)
+- **i18n**: Chinese / English toggle
 
 ## Getting Started
 
@@ -73,20 +95,10 @@ src/
 ├── components/
 │   ├── scene/               # Scene primitives (Narration, ChatBubble, DeepDive...)
 │   └── interactive/         # Interactive components per chapter
-│       ├── ch01/            #   MessageStructure
-│       ├── ch02/            #   ContextLayers, CompactSimulator
-│       ├── ch03/            #   ToolExplorer
-│       ├── ch04/            #   AgenticLoop
-│       ├── ch05/            #   MCPArchitecture
-│       ├── ch06/            #   MemorySystem
-│       ├── ch07/            #   CodeSearch
-│       ├── ch08/            #   HookLifecycle
-│       ├── ch09/            #   SkillBuilder, SkillLoader
-│       ├── ch10/            #   PluginAnatomy
-│       ├── ch11/            #   SubagentDispatch, SubagentIsolation
-│       ├── ch12/            #   PermissionSimulator
-│       └── ch13/            #   ConfigMap, ConfigBuilder
-├── chapters/                # Chapter scene definitions (Ch01–Ch13)
+│       ├── AnnotatedSource  #   Annotated source code viewer (used across all chapters)
+│       ├── ArchitectureTreemap  # Source structure explorer (homepage)
+│       ├── ch01–ch16/       #   Chapter-specific interactive components
+├── chapters/                # Chapter scene definitions (Ch01–Ch16)
 ├── layouts/                 # Astro layouts (base + chapter)
 ├── pages/
 │   ├── index.astro          # Home page
@@ -98,17 +110,19 @@ src/
 
 ## How It Works
 
-Each chapter combines two layers:
+Each chapter combines three layers:
 
-1. **Article** (MDX) — scrollable long-form content explaining concepts
-2. **Scenes** (React) — full-screen interactive experiences with click-to-advance navigation
+1. **Scenes** (React) — full-screen interactive experiences with click-to-advance navigation
+2. **Article** (MDX) — scrollable long-form content explaining concepts in depth
+3. **Annotated Source** (React) — real Claude Code source snippets with sidebar annotations
 
-The Scene Engine manages transitions, scroll locking, and progress tracking. Interactive components use `useSceneComplete()` to gate progression — you must interact with each demo before moving forward.
+The Scene Engine manages transitions, scroll locking, and progress tracking. Interactive components use `useSceneComplete()` to gate progression.
 
 ## References
 
 - Visual & interaction design: [The Evolution of Trust](https://ncase.me/trust/) by Nicky Case
-- Content: [Claude Code Docs](https://docs.anthropic.com/en/docs/claude-code), [Learn ShareAI](https://learn.shareai.run/en/)
+- Source code analysis: [Claude Code](https://github.com/anthropics/claude-code) by Anthropic
+- Content reference: [ccunpacked.dev](https://ccunpacked.dev/), [DeepWiki](https://deepwiki.com/zackautocracy/claude-code)
 
 ## License
 
