@@ -74,6 +74,24 @@ export default function ToolCallSimulator() {
     return cleanup;
   }, [cleanup]);
 
+  // Mark task complete when reaching the result (last) step
+  // This is needed because the execute→result auto-advance via setTimeout
+  // bypasses handleNextStep, so the completion logic there is never reached.
+  useEffect(() => {
+    if (!selectedTaskId || !selectedTask) return;
+    if (currentStep < selectedTask.steps.length - 1) return;
+    if (completedTasks.has(selectedTaskId)) return;
+
+    const next = new Set(completedTasks);
+    next.add(selectedTaskId);
+    setCompletedTasks(next);
+
+    if (next.size >= 2 && !hasCompleted) {
+      setHasCompleted(true);
+      if (sceneComplete) sceneComplete();
+    }
+  }, [currentStep, selectedTaskId]);
+
   const handleSelectTask = (taskId: string) => {
     cleanup();
     setSelectedTaskId(taskId);
