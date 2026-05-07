@@ -20,7 +20,8 @@ const prev = chapters.find((c) => c.id === (chapterNum ?? 0) - 1);
 const next = chapters.find((c) => c.id === (chapterNum ?? 0) + 1);
 const pageTitle = `${String(chapterNum).padStart(2, '0')}. ${title} — Claude 101`;
 const categories = getChaptersByCategory();
-const base = import.meta.env.BASE_URL;
+// Strip trailing slash so `${base}/path` works for both '/' and '/sub'.
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
 <Layout title={pageTitle} bodyClass="chapter-page">
