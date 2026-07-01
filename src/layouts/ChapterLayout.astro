@@ -15,10 +15,12 @@ interface Props {
 
 const props = Astro.props.frontmatter ?? Astro.props;
 const { chapter: chapterNum, title, subtitle } = props;
-const current = chapters.find((c) => c.id === chapterNum);
-const prev = chapters.find((c) => c.id === (chapterNum ?? 0) - 1);
-const next = chapters.find((c) => c.id === (chapterNum ?? 0) + 1);
-const pageTitle = `${String(chapterNum).padStart(2, '0')}. ${title} — Claude 101`;
+const currentIndex = chapters.findIndex((c) => c.id === chapterNum);
+const current = currentIndex >= 0 ? chapters[currentIndex] : undefined;
+const displayChapterNum = currentIndex >= 0 ? currentIndex + 1 : chapterNum;
+const prev = currentIndex > 0 ? chapters[currentIndex - 1] : undefined;
+const next = currentIndex >= 0 && currentIndex < chapters.length - 1 ? chapters[currentIndex + 1] : undefined;
+const pageTitle = `${String(displayChapterNum).padStart(2, '0')}. ${title} — Claude 101`;
 const categories = getChaptersByCategory();
 // Strip trailing slash so `${base}/path` works for both '/' and '/sub'.
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -77,7 +79,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       </svg>
     </button>
     <div class="top-bar__chapter">
-      {String(chapterNum).padStart(2, '0')}. {title}
+      {String(displayChapterNum).padStart(2, '0')}. {title}
     </div>
     <div class="top-bar__nav">
       <button class="lang-toggle lang-toggle--mobile" id="lang-toggle-mobile" aria-label="Switch language">
