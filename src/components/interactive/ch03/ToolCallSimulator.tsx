@@ -92,6 +92,29 @@ export default function ToolCallSimulator() {
     return cleanup;
   }, [cleanup, currentPhase, selectedTaskStepCount]);
 
+  useEffect(() => {
+    if (currentPhase !== 'result' || !selectedTaskId) {
+      return;
+    }
+
+    setCompletedTasks((prev) => {
+      if (prev.has(selectedTaskId)) {
+        return prev;
+      }
+
+      const next = new Set(prev);
+      next.add(selectedTaskId);
+      return next;
+    });
+  }, [currentPhase, selectedTaskId]);
+
+  useEffect(() => {
+    if (completedTasks.size >= tasks.length && !hasCompleted) {
+      setHasCompleted(true);
+      sceneComplete?.();
+    }
+  }, [completedTasks.size, hasCompleted, sceneComplete, tasks.length]);
+
   const handleSelectTask = (taskId: string) => {
     cleanup();
     setSelectedTaskId(taskId);
@@ -110,7 +133,7 @@ export default function ToolCallSimulator() {
       next.add(selectedTask.id);
       setCompletedTasks(next);
 
-      if (next.size >= 2 && !hasCompleted) {
+      if (next.size >= tasks.length && !hasCompleted) {
         setHasCompleted(true);
         if (sceneComplete) sceneComplete();
       }
@@ -202,8 +225,10 @@ export default function ToolCallSimulator() {
             ) : (
               <div className="tool-sim__done">
                 {t('✅ 工具调用完成！', '✅ Tool call complete!')}
-                {completedTasks.size < 2 && (
+                {completedTasks.size < tasks.length ? (
                   <span className="tool-sim__done-hint">{t('试试其他任务吧', 'Try another task')}</span>
+                ) : (
+                  <span className="tool-sim__done-hint">{t('已完成全部任务，点击下方“继续”进入下一张幻灯片', 'All tasks complete. Click “Continue” below to go to the next slide')}</span>
                 )}
               </div>
             )}
