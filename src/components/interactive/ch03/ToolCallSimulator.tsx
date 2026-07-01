@@ -83,30 +83,33 @@ export default function ToolCallSimulator() {
 
   const handleNextStep = () => {
     if (!selectedTask) return;
+    if (currentStep >= selectedTask.steps.length - 1) return;
 
-    if (currentStep < selectedTask.steps.length - 1) {
-      if (selectedTask.steps[currentStep + 1].phase === 'execute') {
+    if (selectedTask.steps[currentStep + 1].phase === 'execute') {
+      setCurrentStep((s) => s + 1);
+      setIsAnimating(true);
+      timerRef.current = setTimeout(() => {
         setCurrentStep((s) => s + 1);
-        setIsAnimating(true);
-        timerRef.current = setTimeout(() => {
-          setCurrentStep((s) => s + 1);
-          setIsAnimating(false);
-        }, 1200);
-      } else {
-        setCurrentStep((s) => s + 1);
-      }
+        setIsAnimating(false);
+      }, 1200);
     } else {
-      // Task finished
-      const next = new Set(completedTasks);
-      next.add(selectedTask.id);
-      setCompletedTasks(next);
-
-      if (next.size >= 2 && !hasCompleted) {
-        setHasCompleted(true);
-        if (sceneComplete) sceneComplete();
-      }
+      setCurrentStep((s) => s + 1);
     }
   };
+
+  // Mark the task complete once the simulation reaches its final ("result") step.
+  useEffect(() => {
+    if (!selectedTask) return;
+    if (currentStep !== selectedTask.steps.length - 1) return;
+    setCompletedTasks((prev) => (prev.has(selectedTask.id) ? prev : new Set(prev).add(selectedTask.id)));
+  }, [currentStep, selectedTaskId]);
+
+  useEffect(() => {
+    if (completedTasks.size >= 2 && !hasCompleted) {
+      setHasCompleted(true);
+      sceneComplete?.();
+    }
+  }, [completedTasks, hasCompleted, sceneComplete]);
 
   const phaseColors: Record<string, string> = {
     think: '#a78bfa',
