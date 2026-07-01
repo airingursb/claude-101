@@ -6,6 +6,7 @@ subtitle: '信任的边界'
 ---
 
 import Ch12Scenes from '../../chapters/ch12/Ch12Scenes';
+import ChapterFooterNav from '../../components/ChapterFooterNav.astro';
 import AnnotatedSource from '../../components/interactive/AnnotatedSource';
 
 export const permissionCode = `async function hasPermissionsToUseToolInner(
@@ -569,15 +570,6 @@ Want to see how the permission waterfall actually works? Here is the **actual so
 
 </div>
 
-<div class="chapter-article__nav">
-<a href={`${import.meta.env.BASE_URL}chapters/agents`}>
-<span class="chapter-article__nav-label">上一章 / Previous</span>
-<span class="chapter-article__nav-title">Ch.11 Agents & Subagents</span>
-</a>
-<a href={`${import.meta.env.BASE_URL}chapters/configuration`}>
-<span class="chapter-article__nav-label">下一章 / Next</span>
-<span class="chapter-article__nav-title">Ch.13 Configuration</span>
-</a>
-</div>
+<ChapterFooterNav slug="permissions" />
 
 </div>

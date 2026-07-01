@@ -6,6 +6,7 @@ subtitle: '代码库的理解与检索'
 ---
 
 import Ch07Scenes from '../../chapters/ch07/Ch07Scenes';
+import ChapterFooterNav from '../../components/ChapterFooterNav.astro';
 import AnnotatedSource from '../../components/interactive/AnnotatedSource';
 
 export const grepToolCode = `async call(
@@ -838,15 +839,6 @@ Read("src/__tests__/user-service.test.ts")
 
 </div>
 
-<div class="chapter-article__nav">
-<a href={`${import.meta.env.BASE_URL}chapters/memory`}>
-<span class="chapter-article__nav-label">上一章 / Previous</span>
-<span class="chapter-article__nav-title">Ch.6 Memory</span>
-</a>
-<a href={`${import.meta.env.BASE_URL}chapters/hooks`}>
-<span class="chapter-article__nav-label">下一章 / Next</span>
-<span class="chapter-article__nav-title">Ch.8 Hooks</span>
-</a>
-</div>
+<ChapterFooterNav slug="codebase-intelligence" />
 
 </div>

@@ -6,6 +6,7 @@ subtitle: '打包你的超能力'
 ---
 
 import Ch10Scenes from '../../chapters/ch10/Ch10Scenes';
+import ChapterFooterNav from '../../components/ChapterFooterNav.astro';
 import AnnotatedSource from '../../components/interactive/AnnotatedSource';
 
 export const pluginCode = `export async function installPluginOp(
@@ -597,14 +598,5 @@ Want to see how plugin installation actually works? Here is the **actual source 
 
 </div>
 
-<div class="chapter-article__nav">
-<a href={`${import.meta.env.BASE_URL}chapters/skills`}>
-<span class="chapter-article__nav-label">上一章 Prev</span>
-<span class="chapter-article__nav-title">Ch.9 Skills</span>
-</a>
-<a href={`${import.meta.env.BASE_URL}chapters/agents`}>
-<span class="chapter-article__nav-label">下一章 Next</span>
-<span class="chapter-article__nav-title">Ch.11 Agents & Subagents</span>
-</a>
-</div>
+<ChapterFooterNav slug="plugins" />
 </div>

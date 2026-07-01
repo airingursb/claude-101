@@ -6,6 +6,7 @@ subtitle: '可复用的超能力'
 ---
 
 import Ch09Scenes from '../../chapters/ch09/Ch09Scenes';
+import ChapterFooterNav from '../../components/ChapterFooterNav.astro';
 import AnnotatedSource from '../../components/interactive/AnnotatedSource';
 
 export const skillCode = `async call(
@@ -567,14 +568,5 @@ Want to see how this actually works under the hood? Here is the **actual source 
 
 </div>
 
-<div class="chapter-article__nav">
-<a href={`${import.meta.env.BASE_URL}chapters/hooks`}>
-<span class="chapter-article__nav-label">上一章 Prev</span>
-<span class="chapter-article__nav-title">Ch.8 Hooks</span>
-</a>
-<a href={`${import.meta.env.BASE_URL}chapters/plugins`}>
-<span class="chapter-article__nav-label">下一章 Next</span>
-<span class="chapter-article__nav-title">Ch.10 Plugins</span>
-</a>
-</div>
+<ChapterFooterNav slug="skills" />
 </div>

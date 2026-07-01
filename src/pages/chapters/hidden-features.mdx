@@ -6,8 +6,7 @@ subtitle: '彩蛋与实验性功能'
 ---
 
 import Ch15Scenes from '../../chapters/ch15/Ch15Scenes';
-
-export const base = import.meta.env.BASE_URL;
+import ChapterFooterNav from '../../components/ChapterFooterNav.astro';
 
 <Ch15Scenes client:only="react" />
 
@@ -243,11 +242,6 @@ These hidden features and experimental capabilities sketch Claude Code's ultimat
 
 </div>
 
-<div class="chapter-article__nav">
-<a href={`${base}chapters/configuration`}>
-<span class="chapter-article__nav-label">上一章 / Previous</span>
-<span class="chapter-article__nav-title">Ch.13 Configuration</span>
-</a>
-</div>
+<ChapterFooterNav slug="hidden-features" />
 
 </div>

@@ -5,9 +5,8 @@ title: 'Tools'
 subtitle: '你有了手和脚'
 ---
 
-export const base = import.meta.env.BASE_URL;
-
 import Ch03Scenes from '../../chapters/ch03/Ch03Scenes';
+import ChapterFooterNav from '../../components/ChapterFooterNav.astro';
 import AnnotatedSource from '../../components/interactive/AnnotatedSource';
 
 export const ch3Code = `export function getAllBaseTools(): Tools {
@@ -728,15 +727,6 @@ Each step's result is injected into context, influencing my next decision. This 
 
 </div>
 
-<div class="chapter-article__nav">
-<a href={`${base}chapters/context`}>
-<span class="chapter-article__nav-label">Previous</span>
-<span class="chapter-article__nav-title">Context</span>
-</a>
-<a href={`${base}chapters/agentic-loop`}>
-<span class="chapter-article__nav-label">Next</span>
-<span class="chapter-article__nav-title">Agentic Loop</span>
-</a>
-</div>
+<ChapterFooterNav slug="tools" />
 
 </div>

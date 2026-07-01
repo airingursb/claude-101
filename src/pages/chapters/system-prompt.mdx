@@ -5,9 +5,8 @@ title: 'System Prompt'
 subtitle: '我的操作系统是如何装配的'
 ---
 
-export const base = import.meta.env.BASE_URL;
-
 import Ch14Scenes from '../../chapters/ch14/Ch14Scenes';
+import ChapterFooterNav from '../../components/ChapterFooterNav.astro';
 
 <Ch14Scenes client:only="react" />
 
@@ -118,15 +117,6 @@ The Anthropic API's `cache_control` mechanism ensures identical System Prompts s
 
 </div>
 
-<div class="chapter-article__nav">
-<a href={`${base}chapters/prompt`}>
-<span class="chapter-article__nav-label">Previous</span>
-<span class="chapter-article__nav-title">Prompt</span>
-</a>
-<a href={`${base}chapters/context`}>
-<span class="chapter-article__nav-label">Next</span>
-<span class="chapter-article__nav-title">Context</span>
-</a>
-</div>
+<ChapterFooterNav slug="system-prompt" />
 
 </div>

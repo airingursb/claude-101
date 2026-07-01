@@ -6,6 +6,7 @@ subtitle: '思考、行动、观察、重复'
 ---
 
 import Ch04Scenes from '../../chapters/ch04/Ch04Scenes';
+import ChapterFooterNav from '../../components/ChapterFooterNav.astro';
 import AnnotatedSource from '../../components/interactive/AnnotatedSource';
 
 export const queryLoopCode = `async function* queryLoop(
@@ -458,15 +459,6 @@ Round 6 - Think: Task complete, return results
 
 </div>
 
-<div class="chapter-article__nav">
-<a href={`${import.meta.env.BASE_URL}chapters/tools`}>
-<span class="chapter-article__nav-label">上一章 / Previous</span>
-<span class="chapter-article__nav-title">Ch.3 Tools</span>
-</a>
-<a href={`${import.meta.env.BASE_URL}chapters/message-pipeline`}>
-<span class="chapter-article__nav-label">下一章 / Next</span>
-<span class="chapter-article__nav-title">Ch.16 Message Pipeline</span>
-</a>
-</div>
+<ChapterFooterNav slug="agentic-loop" />
 
 </div>

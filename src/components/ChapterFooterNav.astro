@@ -1,0 +1,28 @@
+---
+import { chapters } from '../config/chapters';
+
+interface Props {
+  slug: string;
+}
+
+const { slug } = Astro.props;
+const currentIndex = chapters.findIndex((c) => c.slug === slug);
+const prev = currentIndex > 0 ? chapters[currentIndex - 1] : undefined;
+const next = currentIndex >= 0 && currentIndex < chapters.length - 1 ? chapters[currentIndex + 1] : undefined;
+const base = import.meta.env.BASE_URL;
+---
+
+<div class="chapter-article__nav">
+  {prev ? (
+    <a href={`${base}chapters/${prev.slug}`}>
+      <span class="chapter-article__nav-label">上一章 / Previous</span>
+      <span class="chapter-article__nav-title">{prev.title}</span>
+    </a>
+  ) : <span />}
+  {next ? (
+    <a href={`${base}chapters/${next.slug}`}>
+      <span class="chapter-article__nav-label">下一章 / Next</span>
+      <span class="chapter-article__nav-title">{next.title}</span>
+    </a>
+  ) : <span />}
+</div>

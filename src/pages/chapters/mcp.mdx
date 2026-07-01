@@ -6,6 +6,7 @@ subtitle: '连接外部世界'
 ---
 
 import Ch05Scenes from '../../chapters/ch05/Ch05Scenes';
+import ChapterFooterNav from '../../components/ChapterFooterNav.astro';
 import AnnotatedSource from '../../components/interactive/AnnotatedSource';
 
 export const mcpCallToolCode = `async function callMCPTool({
@@ -558,15 +559,6 @@ export const mcpCallToolAnnotations = [
 
 </div>
 
-<div class="chapter-article__nav">
-<a href={`${import.meta.env.BASE_URL}chapters/message-pipeline`}>
-<span class="chapter-article__nav-label">上一章 / Previous</span>
-<span class="chapter-article__nav-title">Ch.16 Message Pipeline</span>
-</a>
-<a href={`${import.meta.env.BASE_URL}chapters/memory`}>
-<span class="chapter-article__nav-label">下一章 / Next</span>
-<span class="chapter-article__nav-title">Ch.6 Memory</span>
-</a>
-</div>
+<ChapterFooterNav slug="mcp" />
 
 </div>

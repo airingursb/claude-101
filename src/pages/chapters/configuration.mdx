@@ -6,6 +6,7 @@ subtitle: '定制你的 Claude Code'
 ---
 
 import Ch13Scenes from '../../chapters/ch13/Ch13Scenes';
+import ChapterFooterNav from '../../components/ChapterFooterNav.astro';
 import AnnotatedSource from '../../components/interactive/AnnotatedSource';
 
 export const configCode = `// QueryEngine.ts — System prompt assembly
@@ -757,15 +758,6 @@ Want to see how system prompts are assembled and config layers merge? Here is **
 
 </div>
 
-<div class="chapter-article__nav">
-<a href={`${import.meta.env.BASE_URL}chapters/permissions`}>
-<span class="chapter-article__nav-label">上一章 / Previous</span>
-<span class="chapter-article__nav-title">Ch.12 Permissions & Safety</span>
-</a>
-<a href={`${import.meta.env.BASE_URL}chapters/hidden-features`}>
-<span class="chapter-article__nav-label">下一章 / Next</span>
-<span class="chapter-article__nav-title">Ch.15 Hidden Features</span>
-</a>
-</div>
+<ChapterFooterNav slug="configuration" />
 
 </div>

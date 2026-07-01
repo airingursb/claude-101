@@ -5,9 +5,8 @@ title: 'Prompt'
 subtitle: '你收到了第一条指令'
 ---
 
-export const base = import.meta.env.BASE_URL;
-
 import Ch01Scenes from '../../chapters/ch01/Ch01Scenes';
+import ChapterFooterNav from '../../components/ChapterFooterNav.astro';
 import AnnotatedSource from '../../components/interactive/AnnotatedSource';
 
 export const promptCode = `async function getSystemPrompt(
@@ -480,12 +479,6 @@ Prompt engineering is, at its core, programming -- except the compiler is a lang
 
 </div>
 
-<div class="chapter-article__nav">
-<span></span>
-<a href={`${base}chapters/system-prompt`}>
-<span class="chapter-article__nav-label">Next</span>
-<span class="chapter-article__nav-title">System Prompt</span>
-</a>
-</div>
+<ChapterFooterNav slug="prompt" />
 
 </div>

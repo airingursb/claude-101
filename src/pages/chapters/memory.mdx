@@ -6,6 +6,7 @@ subtitle: '持久化的记忆'
 ---
 
 import Ch06Scenes from '../../chapters/ch06/Ch06Scenes';
+import ChapterFooterNav from '../../components/ChapterFooterNav.astro';
 import AnnotatedSource from '../../components/interactive/AnnotatedSource';
 
 export const loadMemoryCode = `export async function loadMemoryPrompt():
@@ -432,15 +433,6 @@ npm run lint    # Lint code
 
 </div>
 
-<div class="chapter-article__nav">
-<a href={`${import.meta.env.BASE_URL}chapters/mcp`}>
-<span class="chapter-article__nav-label">上一章 / Previous</span>
-<span class="chapter-article__nav-title">Ch.5 MCP</span>
-</a>
-<a href={`${import.meta.env.BASE_URL}chapters/codebase-intelligence`}>
-<span class="chapter-article__nav-label">下一章 / Next</span>
-<span class="chapter-article__nav-title">Ch.7 Codebase Intelligence</span>
-</a>
-</div>
+<ChapterFooterNav slug="memory" />
 
 </div>

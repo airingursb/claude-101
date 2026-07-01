@@ -5,9 +5,8 @@ title: 'Message Pipeline'
 subtitle: '消息如何流过系统'
 ---
 
-export const base = import.meta.env.BASE_URL;
-
 import Ch16Scenes from '../../chapters/ch16/Ch16Scenes';
+import ChapterFooterNav from '../../components/ChapterFooterNav.astro';
 
 <Ch16Scenes client:only="react" />
 
@@ -156,15 +155,6 @@ The "source of truth" for messages is `QueryEngine.mutableMessages: Message[]` �
 
 </div>
 
-<div class="chapter-article__nav">
-<a href={`${base}chapters/agentic-loop`}>
-<span class="chapter-article__nav-label">上一章 / Previous</span>
-<span class="chapter-article__nav-title">Ch.4 Agentic Loop</span>
-</a>
-<a href={`${base}chapters/mcp`}>
-<span class="chapter-article__nav-label">下一章 / Next</span>
-<span class="chapter-article__nav-title">Ch.5 MCP</span>
-</a>
-</div>
+<ChapterFooterNav slug="message-pipeline" />
 
 </div>

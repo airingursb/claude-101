@@ -5,9 +5,8 @@ title: 'Context'
 subtitle: '你能看到什么？'
 ---
 
-export const base = import.meta.env.BASE_URL;
-
 import Ch02Scenes from '../../chapters/ch02/Ch02Scenes';
+import ChapterFooterNav from '../../components/ChapterFooterNav.astro';
 import AnnotatedSource from '../../components/interactive/AnnotatedSource';
 
 export const ch2Code = `export class QueryEngine {
@@ -539,15 +538,6 @@ Context is not just an accumulation of information -- it directly influences my 
 
 </div>
 
-<div class="chapter-article__nav">
-<a href={`${base}chapters/system-prompt`}>
-<span class="chapter-article__nav-label">Previous</span>
-<span class="chapter-article__nav-title">System Prompt</span>
-</a>
-<a href={`${base}chapters/tools`}>
-<span class="chapter-article__nav-label">Next</span>
-<span class="chapter-article__nav-title">Tools</span>
-</a>
-</div>
+<ChapterFooterNav slug="context" />
 
 </div>
