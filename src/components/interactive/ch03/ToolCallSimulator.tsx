@@ -62,6 +62,8 @@ export default function ToolCallSimulator() {
   ];
 
   const selectedTask = tasks.find((t) => t.id === selectedTaskId);
+  const currentPhase = selectedTask?.steps[currentStep]?.phase;
+  const selectedTaskStepCount = selectedTask?.steps.length ?? 0;
 
   const cleanup = useCallback(() => {
     if (timerRef.current) {
@@ -74,6 +76,45 @@ export default function ToolCallSimulator() {
     return cleanup;
   }, [cleanup]);
 
+  useEffect(() => {
+    if (currentPhase !== 'execute') {
+      return;
+    }
+
+    cleanup();
+    setIsAnimating(true);
+    timerRef.current = setTimeout(() => {
+      setCurrentStep((step) => Math.min(step + 1, selectedTaskStepCount - 1));
+      setIsAnimating(false);
+      timerRef.current = null;
+    }, 1200);
+
+    return cleanup;
+  }, [cleanup, currentPhase, selectedTaskStepCount]);
+
+  useEffect(() => {
+    if (currentPhase !== 'result' || !selectedTaskId) {
+      return;
+    }
+
+    setCompletedTasks((prev) => {
+      if (prev.has(selectedTaskId)) {
+        return prev;
+      }
+
+      const next = new Set(prev);
+      next.add(selectedTaskId);
+      return next;
+    });
+  }, [currentPhase, selectedTaskId]);
+
+  useEffect(() => {
+    if (completedTasks.size >= tasks.length && !hasCompleted) {
+      setHasCompleted(true);
+      sceneComplete?.();
+    }
+  }, [completedTasks.size, hasCompleted, sceneComplete, tasks.length]);
+
   const handleSelectTask = (taskId: string) => {
     cleanup();
     setSelectedTaskId(taskId);
@@ -85,23 +126,14 @@ export default function ToolCallSimulator() {
     if (!selectedTask) return;
 
     if (currentStep < selectedTask.steps.length - 1) {
-      if (selectedTask.steps[currentStep + 1].phase === 'execute') {
-        setCurrentStep((s) => s + 1);
-        setIsAnimating(true);
-        timerRef.current = setTimeout(() => {
-          setCurrentStep((s) => s + 1);
-          setIsAnimating(false);
-        }, 1200);
-      } else {
-        setCurrentStep((s) => s + 1);
-      }
+      setCurrentStep((s) => s + 1);
     } else {
       // Task finished
       const next = new Set(completedTasks);
       next.add(selectedTask.id);
       setCompletedTasks(next);
 
-      if (next.size >= 2 && !hasCompleted) {
+      if (next.size >= tasks.length && !hasCompleted) {
         setHasCompleted(true);
         if (sceneComplete) sceneComplete();
       }
@@ -193,8 +225,10 @@ export default function ToolCallSimulator() {
             ) : (
               <div className="tool-sim__done">
                 {t('✅ 工具调用完成！', '✅ Tool call complete!')}
-                {completedTasks.size < 2 && (
+                {completedTasks.size < tasks.length ? (
                   <span className="tool-sim__done-hint">{t('试试其他任务吧', 'Try another task')}</span>
+                ) : (
+                  <span className="tool-sim__done-hint">{t('已完成全部任务，点击下方“继续”进入下一张幻灯片', 'All tasks complete. Click “Continue” below to go to the next slide')}</span>
                 )}
               </div>
             )}
